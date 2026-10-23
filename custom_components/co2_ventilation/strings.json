@@ -21,7 +21,7 @@
       "no_sensors": "Pick at least one CO2 sensor."
     },
     "abort": {
-      "already_configured": "That fan is already controlled by another CO2 ventilation entry."
+      "already_configured": "CO2 Ventilation is already set up for this fan. To change sensors or settings, open the integration and choose Configure."
     }
   },
   "options": {
