@@ -1,5 +1,5 @@
 {
   "name": "CO2 Ventilation",
-  "homeassistant": "2025.1.0",
+  "homeassistant": "2024.11.0",
   "render_readme": true
 }

@@ -11,7 +11,12 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import CONCENTRATION_PARTS_PER_MILLION
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+try:
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+except ImportError:  # Home Assistant before 2025.2
+    from homeassistant.helpers.entity_platform import (
+        AddEntitiesCallback as AddConfigEntryEntitiesCallback,
+    )
 
 from . import Co2VentilationConfigEntry
 from .const import STATUSES

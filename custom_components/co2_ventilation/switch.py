@@ -7,7 +7,12 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import STATE_OFF
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+try:
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+except ImportError:  # Home Assistant before 2025.2
+    from homeassistant.helpers.entity_platform import (
+        AddEntitiesCallback as AddConfigEntryEntitiesCallback,
+    )
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import Co2VentilationConfigEntry
