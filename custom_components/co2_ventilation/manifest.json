@@ -6,7 +6,7 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/stephencorrell-ops/ha-co2-ventilation",
-  "integration_type": "helper",
+  "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/stephencorrell-ops/ha-co2-ventilation/issues",
   "requirements": [],
