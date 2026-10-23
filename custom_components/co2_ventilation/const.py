@@ -1,0 +1,38 @@
+"""Constants for the CO2 Ventilation integration."""
+
+from __future__ import annotations
+
+DOMAIN = "co2_ventilation"
+
+CONF_CO2_SENSORS = "co2_sensors"
+CONF_FAN_ENTITY = "fan_entity"
+CONF_STARTUP_DELAY = "startup_delay"
+
+DEFAULT_NAME = "CO2 Ventilation"
+DEFAULT_ON_SETPOINT = 900
+DEFAULT_OFF_SETPOINT = 700
+DEFAULT_MIN_RUN = 20
+DEFAULT_STARTUP_DELAY = 120
+
+SETPOINT_MIN = 400
+SETPOINT_MAX = 2000
+SETPOINT_STEP = 25
+MIN_RUN_MAX = 120
+
+STATUS_STARTING = "starting"
+STATUS_DISABLED = "disabled"
+STATUS_IDLE = "idle"
+STATUS_VENTILATING = "ventilating"
+STATUS_HOLDING = "min_run_hold"
+STATUS_MANUAL = "manual"
+STATUS_NO_DATA = "no_data"
+
+STATUSES = [
+    STATUS_STARTING,
+    STATUS_DISABLED,
+    STATUS_IDLE,
+    STATUS_VENTILATING,
+    STATUS_HOLDING,
+    STATUS_MANUAL,
+    STATUS_NO_DATA,
+]

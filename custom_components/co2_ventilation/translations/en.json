@@ -1,0 +1,71 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "CO2 ventilation",
+        "description": "Pick the CO2 sensors that should drive the fan, and the fan to control. Basement or other rooms you only want to watch can be left out.",
+        "data": {
+          "name": "Name",
+          "co2_sensors": "CO2 sensors",
+          "fan_entity": "Fan to control",
+          "startup_delay": "Startup delay"
+        },
+        "data_description": {
+          "co2_sensors": "The fan turns on when any of these reaches the on setpoint, and off once all are below the off setpoint.",
+          "fan_entity": "A switch, fan, or input boolean.",
+          "startup_delay": "After Home Assistant restarts, wait this long for sensors to report, then turn the fan off unless CO2 is already above the on setpoint."
+        }
+      }
+    },
+    "error": {
+      "no_sensors": "Pick at least one CO2 sensor."
+    },
+    "abort": {
+      "already_configured": "That fan is already controlled by another CO2 ventilation entry."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "CO2 ventilation options",
+        "data": {
+          "co2_sensors": "CO2 sensors",
+          "fan_entity": "Fan to control",
+          "startup_delay": "Startup delay"
+        }
+      }
+    },
+    "error": {
+      "no_sensors": "Pick at least one CO2 sensor."
+    }
+  },
+  "entity": {
+    "number": {
+      "on_setpoint": { "name": "Fan on at" },
+      "off_setpoint": { "name": "Fan off at" },
+      "min_run": { "name": "Minimum run time" }
+    },
+    "switch": {
+      "auto": { "name": "Auto ventilation" }
+    },
+    "sensor": {
+      "highest_co2": { "name": "Highest CO2" },
+      "status": {
+        "name": "Status",
+        "state": {
+          "starting": "Starting up",
+          "disabled": "Auto off",
+          "idle": "Idle",
+          "ventilating": "Ventilating",
+          "min_run_hold": "Finishing minimum run",
+          "manual": "Fan on manually",
+          "no_data": "No sensor data"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "on_below_off": { "message": "The on setpoint must be above the off setpoint ({off} ppm)." },
+    "off_above_on": { "message": "The off setpoint must be below the on setpoint ({on} ppm)." }
+  }
+}

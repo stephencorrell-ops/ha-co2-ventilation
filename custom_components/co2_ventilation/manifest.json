@@ -1,0 +1,13 @@
+{
+  "domain": "co2_ventilation",
+  "name": "CO2 Ventilation",
+  "codeowners": ["@stephencorrell-ops"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/stephencorrell-ops/ha-co2-ventilation",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/stephencorrell-ops/ha-co2-ventilation/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
