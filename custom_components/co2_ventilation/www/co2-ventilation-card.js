@@ -1,6 +1,6 @@
-/* CO2 Ventilation card — ships with the co2_ventilation integration. */
+/* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 
-const CARD_VERSION = "0.2.1";
+const CARD_VERSION = "0.2.2";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -49,7 +49,7 @@ class Co2VentilationCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this._dragging) return;
+    if (!this._config || this._dragging) return;
     this._render();
     if (this._config.show_chart && Date.now() - this._historyAt > 5 * 60 * 1000) {
       this._historyAt = Date.now();
@@ -103,7 +103,7 @@ class Co2VentilationCard extends HTMLElement {
   _name(id) {
     const st = this._hass.states[id];
     let n = st?.attributes?.friendly_name || id;
-    return n.replace(/\s*(carbon dioxide|co2|co₂)\s*$/i, "").replace(/\s*(carbon dioxide|co2|co₂)\s*/gi, " ").trim() || n;
+    return n.replace(/\s*(carbon dioxide|co2|co\u2082)\s*$/i, "").replace(/\s*(carbon dioxide|co2|co\u2082)\s*/gi, " ").trim() || n;
   }
 
   // ---------- actions ----------
@@ -163,7 +163,7 @@ class Co2VentilationCard extends HTMLElement {
     if (!this._config || !this._hass) return;
     const e = this._entities();
     if (!e) {
-      this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px">CO2 Ventilation isn't set up yet. Add the integration under Settings → Devices &amp; services.</div></ha-card>`;
+      this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px">CO2 Ventilation isn't set up yet. Add the integration under Settings \u2192 Devices &amp; services.</div></ha-card>`;
       this._built = false;
       return;
     }
@@ -213,7 +213,7 @@ class Co2VentilationCard extends HTMLElement {
 </style>
 <ha-card>
   <div class="head">
-    <div class="title">${esc(this._config.title || "CO₂ ventilation")}</div>
+    <div class="title">${esc(this._config.title || "CO\u2082 ventilation")}</div>
     <span class="pill" id="status"></span>
   </div>
   <div class="rooms" id="rooms"></div>
@@ -274,7 +274,7 @@ class Co2VentilationCard extends HTMLElement {
         const pct = v == null ? 0 : Math.max(4, Math.min(100, ((v - 400) / (Math.max(on * 1.4, 1200) - 400)) * 100));
         const tone = v == null ? "var(--disabled-color)" : v >= on ? "var(--bad)" : v >= off ? "var(--warn)" : "var(--ok)";
         return `<div class="room" data-id="${esc(id)}"><div class="n"><span class="dot" style="background:${COLORS[i % COLORS.length]}"></span>${esc(this._name(id))}</div>
-        <div class="v">${v == null ? "—" : Math.round(v)} <small>ppm</small></div>
+        <div class="v">${v == null ? "\u2014" : Math.round(v)} <small>ppm</small></div>
         <div class="bar"><span style="width:${pct}%;background:${tone}"></span></div></div>`;
       })
       .join("");
@@ -321,7 +321,7 @@ class Co2VentilationCard extends HTMLElement {
     if (!box) return;
     const h = this._history;
     if (!h) {
-      box.innerHTML = `<div class="sub" style="padding:24px 0;text-align:center">Loading history…</div>`;
+      box.innerHTML = `<div class="sub" style="padding:24px 0;text-align:center">Loading history\u2026</div>`;
       return;
     }
     if (h.error) {
