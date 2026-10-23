@@ -2,15 +2,51 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from pathlib import Path
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.typing import ConfigType
 
+from .const import DOMAIN
 from .controller import Co2VentilationController
 
+_LOGGER = logging.getLogger(__name__)
+
 PLATFORMS = [Platform.NUMBER, Platform.SWITCH, Platform.SENSOR]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+CARD_URL = "/co2_ventilation/co2-ventilation-card.js"
+CARD_PATH = Path(__file__).parent / "www" / "co2-ventilation-card.js"
 
 type Co2VentilationConfigEntry = ConfigEntry[Co2VentilationController]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Serve the dashboard card and load it on every dashboard."""
+    if getattr(hass, "http", None) is None or "frontend" not in hass.config.components:
+        return True
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+        from homeassistant.components.http import StaticPathConfig
+
+        version = await hass.async_add_executor_job(_read_version)
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=False)]
+        )
+        add_extra_js_url(hass, f"{CARD_URL}?v={version}")
+    except Exception:  # noqa: BLE001 - the card is optional; never block setup
+        _LOGGER.exception("Could not register the CO2 Ventilation card")
+    return True
+
+
+def _read_version() -> str:
+    manifest = Path(__file__).parent / "manifest.json"
+    return json.loads(manifest.read_text())["version"]
 
 
 async def async_setup_entry(

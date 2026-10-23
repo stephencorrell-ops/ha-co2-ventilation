@@ -45,7 +45,32 @@ With the default name, the entity IDs are:
 | `sensor.co2_ventilation_highest_co2` | Reading being acted on; `source` attribute names the room |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
 
-## Dashboard
+## Dashboard card
+
+The integration ships its own card; there's nothing extra to install. After a restart (and a browser refresh), edit a dashboard, choose **Add card**, and pick **CO2 Ventilation**. It finds your sensors and fan automatically and shows:
+
+- Each room's CO2, colored green / amber / red against your setpoints (tap a room for its history)
+- Auto ventilation and HVAC fan toggles, with minutes left on the minimum run
+- Sliders for the on and off setpoints and minimum run time
+- A chart of the last 24 hours with fan run time shaded and live setpoint lines
+
+Options, all optional:
+
+```yaml
+type: custom:co2-ventilation-card
+title: CO₂ ventilation
+hours: 24                 # chart span
+show_chart: true
+extra_sensors:            # rooms to show but not control the fan
+  - sensor.basement_co2_carbon_dioxide
+# entity: sensor.co2_ventilation_status   # only needed with more than one setup
+```
+
+If the card doesn't appear in the picker, refresh the browser or the app (on the phone app: Settings → Companion app → Debugging → Reset frontend cache).
+
+## Build your own dashboard
+
+If you'd rather assemble cards yourself, here's the YAML.
 
 ### Controls
 

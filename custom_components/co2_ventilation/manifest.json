@@ -1,6 +1,7 @@
 {
   "domain": "co2_ventilation",
   "name": "CO2 Ventilation",
+  "after_dependencies": ["frontend", "http"],
   "codeowners": ["@stephencorrell-ops"],
   "config_flow": true,
   "dependencies": [],
@@ -9,5 +10,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/stephencorrell-ops/ha-co2-ventilation/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

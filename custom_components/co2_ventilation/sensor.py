@@ -63,4 +63,6 @@ class StatusSensor(Co2VentilationEntity, SensorEntity):
             "on_setpoint": self.controller.on_setpoint,
             "off_setpoint": self.controller.off_setpoint,
             "min_run_remaining_s": round(remaining) if remaining else 0,
+            "co2_sensors": self.controller.sensors,
+            "fan_entity": self.controller.fan_entity,
         }
