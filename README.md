@@ -66,7 +66,7 @@ extra_sensors:            # rooms to show but not control the fan
 # entity: sensor.co2_ventilation_status   # only needed with more than one setup
 ```
 
-If the card doesn't appear in the picker, refresh the browser or the app (on the phone app: Settings → Companion app → Debugging → Reset frontend cache).
+The integration adds the card to your dashboard resources automatically (and keeps its version current on updates). If you see "Custom element doesn't exist", refresh the browser or the app (Settings → Companion app → Debugging → Reset frontend cache). If your dashboards' resources are managed in YAML, add `/co2_ventilation/co2-ventilation-card.js` as a JavaScript module yourself.
 
 ## Build your own dashboard
 

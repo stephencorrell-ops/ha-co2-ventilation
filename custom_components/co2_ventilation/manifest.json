@@ -10,5 +10,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/stephencorrell-ops/ha-co2-ventilation/issues",
   "requirements": [],
-  "version": "0.2.3"
+  "version": "0.3.0"
 }

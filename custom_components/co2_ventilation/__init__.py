@@ -51,12 +51,48 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         except Exception:  # noqa: BLE001 - the card is optional; never block setup
             _LOGGER.exception("Could not register the CO2 Ventilation card")
 
+    async def _add_resource(_hass: HomeAssistant | None = None) -> None:
+        try:
+            version = await hass.async_add_executor_job(_read_version)
+            await _async_ensure_lovelace_resource(hass, f"{CARD_URL}?v={version}")
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Could not add the CO2 Ventilation card resource")
+
     if "frontend" in hass.config.components:
         await _register()
     else:
         # The web frontend may finish loading after this integration.
         async_at_started(hass, _register)
+    # Dashboards load cards from their resource list; make sure ours is there.
+    async_at_started(hass, _add_resource)
     return True
+
+
+async def _async_ensure_lovelace_resource(hass: HomeAssistant, url: str) -> None:
+    """Add or update the card in the dashboard resources (UI-managed mode)."""
+    lovelace = hass.data.get("lovelace")
+    if lovelace is None:
+        return
+    resources = getattr(lovelace, "resources", None)
+    if resources is None and isinstance(lovelace, dict):
+        resources = lovelace.get("resources")
+    if resources is None or not hasattr(resources, "async_create_item"):
+        _LOGGER.debug("Dashboard resources are YAML-managed; add %s yourself", url)
+        return
+    if not getattr(resources, "loaded", True):
+        await resources.async_load()
+        resources.loaded = True
+
+    for item in resources.async_items():
+        if item.get("url", "").split("?")[0] == CARD_URL:
+            if item["url"] != url:
+                await resources.async_update_item(
+                    item["id"], {"res_type": "module", "url": url}
+                )
+                _LOGGER.info("Updated CO2 Ventilation card resource to %s", url)
+            return
+    await resources.async_create_item({"res_type": "module", "url": url})
+    _LOGGER.info("Added CO2 Ventilation card resource %s", url)
 
 
 def _read_version() -> str:
