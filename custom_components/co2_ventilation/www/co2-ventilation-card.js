@@ -1,6 +1,6 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 
-const CARD_VERSION = "0.3.0";
+const CARD_VERSION = "0.3.1";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -62,7 +62,7 @@ class Co2VentilationCard extends HTMLElement {
   }
 
   getGridOptions() {
-    return { columns: 12, min_columns: 6, rows: "auto" };
+    return { columns: "full", rows: "auto" };
   }
 
   // ---------- entity discovery ----------
