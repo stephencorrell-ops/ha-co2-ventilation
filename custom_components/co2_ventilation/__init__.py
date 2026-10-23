@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
@@ -22,25 +23,39 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 CARD_URL = "/co2_ventilation/co2-ventilation-card.js"
 CARD_PATH = Path(__file__).parent / "www" / "co2-ventilation-card.js"
+CARD_REGISTERED = f"{DOMAIN}_card_registered"
 
 type Co2VentilationConfigEntry = ConfigEntry[Co2VentilationController]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the dashboard card and load it on every dashboard."""
-    if getattr(hass, "http", None) is None or "frontend" not in hass.config.components:
-        return True
-    try:
-        from homeassistant.components.frontend import add_extra_js_url
-        from homeassistant.components.http import StaticPathConfig
 
-        version = await hass.async_add_executor_job(_read_version)
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=False)]
-        )
-        add_extra_js_url(hass, f"{CARD_URL}?v={version}")
-    except Exception:  # noqa: BLE001 - the card is optional; never block setup
-        _LOGGER.exception("Could not register the CO2 Ventilation card")
+    async def _register(_hass: HomeAssistant | None = None) -> None:
+        if hass.data.get(CARD_REGISTERED):
+            return
+        if getattr(hass, "http", None) is None:
+            _LOGGER.debug("HTTP not available; dashboard card not registered")
+            return
+        try:
+            from homeassistant.components.frontend import add_extra_js_url
+            from homeassistant.components.http import StaticPathConfig
+
+            version = await hass.async_add_executor_job(_read_version)
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(CARD_URL, str(CARD_PATH), cache_headers=False)]
+            )
+            add_extra_js_url(hass, f"{CARD_URL}?v={version}")
+            hass.data[CARD_REGISTERED] = True
+            _LOGGER.info("CO2 Ventilation card registered at %s", CARD_URL)
+        except Exception:  # noqa: BLE001 - the card is optional; never block setup
+            _LOGGER.exception("Could not register the CO2 Ventilation card")
+
+    if "frontend" in hass.config.components:
+        await _register()
+    else:
+        # The web frontend may finish loading after this integration.
+        async_at_started(hass, _register)
     return True
 
 
