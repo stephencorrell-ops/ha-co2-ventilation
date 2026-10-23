@@ -71,11 +71,11 @@ async def _advance(hass: HomeAssistant, freezer, seconds: float) -> None:
 
 async def test_entities_created(hass: HomeAssistant) -> None:
     await _setup(hass)
-    assert hass.states.get(ON_NUM).state == "900.0"
-    assert hass.states.get(OFF_NUM).state == "700.0"
-    assert hass.states.get(MIN_NUM).state == "20.0"
+    assert float(hass.states.get(ON_NUM).state) == 900
+    assert float(hass.states.get(OFF_NUM).state) == 700
+    assert float(hass.states.get(MIN_NUM).state) == 20
     assert hass.states.get(AUTO).state == "on"
-    assert hass.states.get(HIGHEST).state == "500.0"
+    assert float(hass.states.get(HIGHEST).state) == 500
     assert hass.states.get(STATUS).state == "idle"
 
 
@@ -147,7 +147,7 @@ async def test_unavailable_sensor_ignored(hass: HomeAssistant) -> None:
     _co2(hass, "sensor.living", 920)
     await hass.async_block_till_done()
     assert hass.states.get(FAN).state == "on"
-    assert hass.states.get(HIGHEST).state == "920.0"
+    assert float(hass.states.get(HIGHEST).state) == 920
 
 
 async def test_manual_fan_left_alone(hass: HomeAssistant, freezer) -> None:
