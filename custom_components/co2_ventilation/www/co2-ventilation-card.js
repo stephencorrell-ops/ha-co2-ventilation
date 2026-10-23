@@ -1,6 +1,6 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 
-const CARD_VERSION = "0.2.2";
+const CARD_VERSION = "0.2.3";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -414,7 +414,7 @@ if (!customElements.get("co2-ventilation-card")) {
     type: "co2-ventilation-card",
     name: "CO2 Ventilation",
     description: "Room CO2, fan control, setpoint sliders, and a 24-hour chart.",
-    preview: true,
+    preview: false,
     documentationURL: "https://github.com/stephencorrell-ops/ha-co2-ventilation",
   });
   console.info(`%c CO2-VENTILATION-CARD %c ${CARD_VERSION} `, "background:#1baf7a;color:#fff", "");
