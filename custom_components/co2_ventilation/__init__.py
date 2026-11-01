@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import hashlib
 import logging
 from pathlib import Path
 
@@ -96,8 +96,13 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant, url: str) -> None
 
 
 def _read_version() -> str:
-    manifest = Path(__file__).parent / "manifest.json"
-    return json.loads(manifest.read_text())["version"]
+    """Fingerprint of the card file, so any change gives it a new address.
+
+    Browsers and the companion app cache the card by URL; changing the URL
+    whenever the file changes makes them download the new copy.
+    """
+    digest = hashlib.sha256(CARD_PATH.read_bytes()).hexdigest()[:10]
+    return digest
 
 
 async def async_setup_entry(

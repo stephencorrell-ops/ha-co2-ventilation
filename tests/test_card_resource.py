@@ -51,3 +51,12 @@ async def test_leaves_other_resources(hass: HomeAssistant) -> None:
 async def test_yaml_mode_is_skipped(hass: HomeAssistant) -> None:
     hass.data["lovelace"] = SimpleNamespace(resources=SimpleNamespace())
     await _async_ensure_lovelace_resource(hass, f"{CARD_URL}?v=1")
+
+
+def test_fingerprint_tracks_file_contents() -> None:
+    import hashlib
+
+    from custom_components.co2_ventilation import CARD_PATH, _read_version
+
+    expected = hashlib.sha256(CARD_PATH.read_bytes()).hexdigest()[:10]
+    assert _read_version() == expected
