@@ -1,0 +1,46 @@
+name: Release
+
+# Publishes a GitHub release (and tag) when the version in manifest.json changes, using the matching
+# section of CHANGELOG.md as the release notes. HACS shows these notes and version numbers.
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/co2_ventilation/manifest.json
+      - CHANGELOG.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version and notes
+        id: v
+        run: |
+          version=$(jq -r .version custom_components/co2_ventilation/manifest.json)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          awk -v v="${version}" '
+            /^## / { if (found) exit; if (index($0, "## " v) == 1) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "Version ${version}" > notes.md; fi
+          {
+            echo
+            echo "**To update:** HACS, then CO2 Ventilation, then Update. Restart Home Assistant and refresh your dashboard."
+            echo
+            echo "Full history: https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md"
+          } >> notes.md
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            gh release edit "v${VERSION}" --title "v${VERSION}" --notes-file notes.md
+          else
+            gh release create "v${VERSION}" --target "${GITHUB_SHA}" --title "v${VERSION}" --notes-file notes.md
+          fi
