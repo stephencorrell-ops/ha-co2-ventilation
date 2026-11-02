@@ -60,3 +60,11 @@ def test_fingerprint_tracks_file_contents() -> None:
 
     expected = hashlib.sha256(CARD_PATH.read_bytes()).hexdigest()[:10]
     assert _read_version() == expected
+
+
+async def test_resource_address_stays_plain(hass: HomeAssistant):
+    """An older ?v= address is put back to the plain one, which the app loads reliably."""
+    res = FakeResources([{"id": "7", "res_type": "module", "url": f"{CARD_URL}?v=a6d9a27300"}])
+    hass.data["lovelace"] = SimpleNamespace(resources=res)
+    await _async_ensure_lovelace_resource(hass, CARD_URL)
+    assert res.items[0]["url"] == CARD_URL

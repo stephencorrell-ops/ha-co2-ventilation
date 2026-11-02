@@ -4,6 +4,10 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.3.4
+
+- The dashboard resource address no longer carries a changing ?v= number. With it, the card failed to load in the Home Assistant app and in Safari. The integration also puts an older ?v= address back to the plain one.
+
 ## 0.3.3
 
 - Fixed the card failing to load next to other custom cards, and wrapped it so its names stay private.

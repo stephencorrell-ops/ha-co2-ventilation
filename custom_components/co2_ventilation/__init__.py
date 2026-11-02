@@ -53,8 +53,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def _add_resource(_hass: HomeAssistant | None = None) -> None:
         try:
-            version = await hass.async_add_executor_job(_read_version)
-            await _async_ensure_lovelace_resource(hass, f"{CARD_URL}?v={version}")
+            # A plain address with no ?v=. The app and some browsers fail to start the card when the
+            # dashboard resource address changes; the file is served uncached, so it stays fresh anyway.
+            await _async_ensure_lovelace_resource(hass, CARD_URL)
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Could not add the CO2 Ventilation card resource")
 
