@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.3.4";
+const CARD_VERSION = "0.4.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -206,6 +206,15 @@ class Co2VentilationCard extends HTMLElement {
   .tg.on { background:var(--primary-color); }
   .tg.on::after { left:21px; }
   .sub { font-size:12px; color:var(--secondary-text-color); }
+  .setpts.locked input[type=range] { pointer-events:none; opacity:.4; }
+  .val { display:flex; align-items:center; justify-content:flex-end; gap:4px; }
+  .val input { width:58px; box-sizing:border-box; text-align:right; font:inherit; font-size:14px; color:var(--primary-text-color); background:var(--secondary-background-color); border:1px solid var(--divider-color); border-radius:6px; padding:4px 6px; -moz-appearance:textfield; }
+  .val input::-webkit-outer-spin-button, .val input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .val input:focus { outline:none; border-color:var(--primary-color); }
+  .setpts.locked .val input { background:transparent; border-color:transparent; color:var(--secondary-text-color); padding-right:0; }
+  .lock { border:1px solid var(--divider-color); background:transparent; color:var(--primary-text-color); border-radius:16px; padding:4px 12px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; }
+  .lock ha-icon { --mdc-icon-size:18px; color:inherit; }
+  .setpts:not(.locked) .lock { border-color:var(--primary-color); color:var(--primary-color); }
   .chart { margin-top:12px; border-top:1px solid var(--divider-color); padding-top:10px; }
   .legend { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:12px; color:var(--secondary-text-color); margin-bottom:4px; }
   .legend span { display:flex; align-items:center; gap:4px; }
@@ -221,27 +230,67 @@ class Co2VentilationCard extends HTMLElement {
   <div class="ctl">
     <div class="row"><ha-icon icon="mdi:robot"></ha-icon><span class="l">Auto</span><span class="grow sub" id="autosub"></span><button class="tg" id="auto" aria-label="Auto ventilation"></button></div>
     <div class="row"><ha-icon icon="mdi:fan"></ha-icon><span class="l">HVAC fan</span><span class="grow sub" id="fansub"></span><button class="tg" id="fan" aria-label="HVAC fan"></button></div>
-    ${this._sliderRow("on", "mdi:arrow-collapse-up", "Fan on at", e.on)}
-    ${this._sliderRow("off", "mdi:arrow-collapse-down", "Fan off at", e.off)}
-    ${this._sliderRow("min", "mdi:timer-outline", "Minimum run", e.min)}
+    <div class="setpts locked" id="setpts">
+      <div class="row"><ha-icon icon="mdi:tune-variant"></ha-icon><span class="l">Setpoints</span><span class="grow sub" id="locksub">Locked</span>
+        <button class="lock" id="lock" aria-label="Unlock setpoints"><ha-icon icon="mdi:lock"></ha-icon><span id="locktxt">Unlock</span></button></div>
+      ${this._sliderRow("on", "mdi:arrow-collapse-up", "Fan on at", e.on)}
+      ${this._sliderRow("off", "mdi:arrow-collapse-down", "Fan off at", e.off)}
+      ${this._sliderRow("min", "mdi:timer-outline", "Minimum run", e.min)}
+    </div>
   </div>
   ${this._config.show_chart ? `<div class="chart"><div class="legend" id="legend"></div><div id="svg"></div></div>` : ""}
 </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
     $("auto").addEventListener("click", () => e.auto && this._call("switch", "toggle", { entity_id: e.auto }));
     $("fan").addEventListener("click", () => e.fan && this._call("homeassistant", "toggle", { entity_id: e.fan }));
+    $("lock").addEventListener("click", () => this._setLocked(!this._locked));
+    this._setLocked(true);
     for (const key of ["on", "off", "min"]) {
       const input = $(`s_${key}`);
       if (!input) continue;
       const unit = key === "min" ? " min" : " ppm";
-      input.addEventListener("pointerdown", () => (this._dragging = true));
+      input.addEventListener("pointerdown", () => {
+        this._dragging = true;
+        this._armRelock();
+      });
       input.addEventListener("input", () => {
         this._dragging = true;
-        $(`v_${key}`).textContent = `${input.value}${unit}`;
+        $(`v_${key}`).value = input.value;
       });
       input.addEventListener("change", async () => {
         this._dragging = false;
+        if (this._locked) {
+          this._render(true);
+          return;
+        }
+        this._armRelock(10);
         await this._call("number", "set_value", { entity_id: e[key], value: Number(input.value) });
+      });
+      const box = $(`v_${key}`);
+      box.addEventListener("focus", () => {
+        this._armRelock(60);
+        box.select();
+      });
+      box.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") box.blur();
+        if (ev.key === "Escape") {
+          box.value = Math.round(this._num(e[key]));
+          box.blur();
+        }
+      });
+      box.addEventListener("change", async () => {
+        if (this._locked) return this._render(true);
+        const lo = Number(input.min), hi = Number(input.max), step = Number(input.step) || 1;
+        let v = Number(box.value);
+        if (!Number.isFinite(v) || box.value === "") {
+          box.value = Math.round(this._num(e[key]));
+          return;
+        }
+        v = Math.min(hi, Math.max(lo, Math.round(v / step) * step));
+        box.value = v;
+        input.value = v;
+        this._armRelock(10);
+        await this._call("number", "set_value", { entity_id: e[key], value: v });
       });
       input.addEventListener("blur", () => (this._dragging = false));
     }
@@ -249,12 +298,38 @@ class Co2VentilationCard extends HTMLElement {
     this._renderChart();
   }
 
+  _setLocked(locked) {
+    this._locked = locked;
+    clearTimeout(this._relockTimer);
+    const $ = (id) => this.shadowRoot.getElementById(id);
+    const box = $("setpts");
+    if (!box) return;
+    box.classList.toggle("locked", locked);
+    box.querySelectorAll("input").forEach((i) => (i.disabled = locked));
+    $("lock").querySelector("ha-icon").setAttribute("icon", locked ? "mdi:lock" : "mdi:lock-open-variant");
+    $("lock").setAttribute("aria-label", locked ? "Unlock setpoints" : "Lock setpoints");
+    $("locktxt").textContent = locked ? "Unlock" : "Lock";
+    $("locksub").textContent = locked ? "Locked" : "Unlocked \u2014 locks again in 30 s";
+    if (!locked) this._armRelock();
+  }
+
+  _armRelock(seconds = 30) {
+    if (this._locked) return;
+    clearTimeout(this._relockTimer);
+    const sub = this.shadowRoot.getElementById("locksub");
+    if (sub) sub.textContent = `Unlocked \u2014 locks again in ${seconds} s`;
+    this._relockTimer = setTimeout(() => {
+      this._dragging = false;
+      this._setLocked(true);
+    }, seconds * 1000);
+  }
+
   _sliderRow(key, icon, label, entityId) {
     if (!entityId) return "";
     const a = this._hass.states[entityId]?.attributes || {};
     return `<div class="row"><ha-icon icon="${icon}"></ha-icon><span class="l">${label}</span>
       <input type="range" id="s_${key}" min="${a.min ?? 0}" max="${a.max ?? 100}" step="${a.step ?? 1}">
-      <span class="val" id="v_${key}"></span></div>`;
+      <span class="val"><input type="number" id="v_${key}" inputmode="numeric" min="${a.min ?? 0}" max="${a.max ?? 100}" step="${a.step ?? 1}" aria-label="${label}"><span>${key === "min" ? "min" : "ppm"}</span></span></div>`;
   }
 
   _update() {
@@ -299,7 +374,8 @@ class Co2VentilationCard extends HTMLElement {
       const v = this._num(e[key]);
       if (v == null) continue;
       input.value = v;
-      $(`v_${key}`).textContent = `${Math.round(v)}${key === "min" ? " min" : " ppm"}`;
+      const box = $(`v_${key}`);
+      if (this.shadowRoot.activeElement !== box) box.value = Math.round(v);
     }
 
     const legend = $("legend");

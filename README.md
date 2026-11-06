@@ -51,7 +51,7 @@ The integration ships its own card; there's nothing extra to install. After a re
 
 - Each room's CO2, colored green / amber / red against your setpoints (tap a room for its history)
 - Auto ventilation and HVAC fan toggles, with minutes left on the minimum run
-- Sliders for the on and off setpoints and minimum run time
+- Setpoint and minimum run controls, locked by default so a stray touch can't change them. Tap **Unlock**, then drag a slider or tap the number and type a value. They lock again 10 seconds after a change (30 seconds if you don't touch anything).
 - A chart of the last 24 hours with fan run time shaded and live setpoint lines
 
 Options, all optional:
