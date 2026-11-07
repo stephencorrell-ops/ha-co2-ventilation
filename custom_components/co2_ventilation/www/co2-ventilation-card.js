@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.4.0";
+const CARD_VERSION = "0.5.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -13,6 +13,8 @@ const STATUS_TEXT = {
   manual: "Fan on manually",
   no_data: "No sensor data",
 };
+const SPEED_LABELS = { low: "Low", medium_low: "Med-low", medium: "Medium" };
+const SPEED_LEVEL = { low: 1, medium_low: 2, medium: 3 };
 const STATUS_TONE = {
   ventilating: "on",
   min_run_hold: "on",
@@ -93,6 +95,7 @@ class Co2VentilationCard extends HTMLElement {
       off: byKey("off_setpoint", "_fan_off_at"),
       min: byKey("min_run", "_minimum_run_time"),
       highest: byKey("highest_co2", "_highest_co2"),
+      speed: byKey("speed", "_ventilation_speed"),
     };
   }
 
@@ -215,6 +218,9 @@ class Co2VentilationCard extends HTMLElement {
   .lock { border:1px solid var(--divider-color); background:transparent; color:var(--primary-text-color); border-radius:16px; padding:4px 12px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; }
   .lock ha-icon { --mdc-icon-size:18px; color:inherit; }
   .setpts:not(.locked) .lock { border-color:var(--primary-color); color:var(--primary-color); }
+  .seg { display:flex; gap:4px; flex:1; justify-content:flex-end; }
+  .seg button { border:1px solid var(--divider-color); background:transparent; color:var(--primary-text-color); border-radius:16px; padding:4px 12px; font:inherit; font-size:13px; cursor:pointer; }
+  .seg button.on { background:var(--primary-color); border-color:var(--primary-color); color:var(--text-primary-color,#fff); }
   .chart { margin-top:12px; border-top:1px solid var(--divider-color); padding-top:10px; }
   .legend { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:12px; color:var(--secondary-text-color); margin-bottom:4px; }
   .legend span { display:flex; align-items:center; gap:4px; }
@@ -230,6 +236,7 @@ class Co2VentilationCard extends HTMLElement {
   <div class="ctl">
     <div class="row"><ha-icon icon="mdi:robot"></ha-icon><span class="l">Auto</span><span class="grow sub" id="autosub"></span><button class="tg" id="auto" aria-label="Auto ventilation"></button></div>
     <div class="row"><ha-icon icon="mdi:fan"></ha-icon><span class="l">HVAC fan</span><span class="grow sub" id="fansub"></span><button class="tg" id="fan" aria-label="HVAC fan"></button></div>
+    ${e.speed ? `<div class="row"><ha-icon icon="mdi:fan-speed-1" id="speedicon"></ha-icon><span class="l">Speed</span><div class="seg" id="speed" role="group" aria-label="Ventilation speed">${(this._hass.states[e.speed]?.attributes?.options || Object.keys(SPEED_LABELS)).map((o) => `<button data-o="${esc(o)}">${esc(SPEED_LABELS[o] || o)}</button>`).join("")}</div></div>` : ""}
     <div class="setpts locked" id="setpts">
       <div class="row"><ha-icon icon="mdi:tune-variant"></ha-icon><span class="l">Setpoints</span><span class="grow sub" id="locksub">Locked</span>
         <button class="lock" id="lock" aria-label="Unlock setpoints"><ha-icon icon="mdi:lock"></ha-icon><span id="locktxt">Unlock</span></button></div>
@@ -242,7 +249,18 @@ class Co2VentilationCard extends HTMLElement {
 </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
     $("auto").addEventListener("click", () => e.auto && this._call("switch", "toggle", { entity_id: e.auto }));
-    $("fan").addEventListener("click", () => e.fan && this._call("homeassistant", "toggle", { entity_id: e.fan }));
+    $("fan").addEventListener("click", () => {
+      if (!e.fan) return;
+      const pct = this._speedPercentage();
+      if (this._hass.states[e.fan]?.state !== "on" && pct != null) {
+        this._call("fan", "turn_on", { entity_id: e.fan, percentage: pct });
+      } else {
+        this._call("homeassistant", "toggle", { entity_id: e.fan });
+      }
+    });
+    $("speed")?.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => this._call("select", "select_option", { entity_id: e.speed, option: b.dataset.o }))
+    );
     $("lock").addEventListener("click", () => this._setLocked(!this._locked));
     this._setLocked(true);
     for (const key of ["on", "off", "min"]) {
@@ -296,6 +314,18 @@ class Co2VentilationCard extends HTMLElement {
     }
     this._built = true;
     this._renderChart();
+  }
+
+  // Same math as the integration: speed N of the fan's steps, as a percentage.
+  _speedPercentage() {
+    const e = this._e;
+    if (!e?.speed || !e.fan?.startsWith("fan.")) return null;
+    const step = parseFloat(this._hass.states[e.fan]?.attributes?.percentage_step);
+    if (!Number.isFinite(step) || step <= 0 || step >= 100) return null;
+    const count = Math.max(1, Math.round(100 / step));
+    if (count <= 1) return null;
+    const level = Math.min(SPEED_LEVEL[this._hass.states[e.speed]?.state] || 1, count);
+    return Math.floor((level * 100) / count);
   }
 
   _setLocked(locked) {
@@ -367,6 +397,15 @@ class Co2VentilationCard extends HTMLElement {
     $("fan").classList.toggle("on", fanOn);
     const remaining = hass.states[e.status]?.attributes?.min_run_remaining_s || 0;
     $("fansub").textContent = st === "min_run_hold" && remaining ? `${Math.ceil(remaining / 60)} min left` : fanOn ? "Running" : "Off";
+    const speedEl = $("speed");
+    if (speedEl) {
+      const cur = hass.states[e.speed]?.state;
+      speedEl.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.o === cur);
+        b.setAttribute("aria-pressed", b.dataset.o === cur ? "true" : "false");
+      });
+      $("speedicon")?.setAttribute("icon", `mdi:fan-speed-${SPEED_LEVEL[cur] || 1}`);
+    }
 
     for (const key of ["on", "off", "min"]) {
       const input = $(`s_${key}`);
@@ -490,7 +529,7 @@ if (!customElements.get("co2-ventilation-card")) {
   window.customCards.push({
     type: "co2-ventilation-card",
     name: "CO2 Ventilation",
-    description: "Room CO2, fan control, setpoint sliders, and a 24-hour chart.",
+    description: "Room CO2, fan control and speed, setpoint sliders, and a 24-hour chart.",
     preview: false,
     documentationURL: "https://github.com/stephencorrell-ops/ha-co2-ventilation",
   });

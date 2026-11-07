@@ -70,4 +70,5 @@ class StatusSensor(Co2VentilationEntity, SensorEntity):
             "min_run_remaining_s": round(remaining) if remaining else 0,
             "co2_sensors": self.controller.sensors,
             "fan_entity": self.controller.fan_entity,
+            "speed": self.controller.speed,
         }

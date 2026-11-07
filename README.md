@@ -5,6 +5,7 @@ Runs your HVAC fan (or any switch, fan, or input boolean) when indoor CO2 gets h
 - **Fan on at / Fan off at** setpoints with hysteresis (defaults 900 / 700 ppm)
 - **Minimum run time**, so the fan doesn't short-cycle (default 20 min)
 - **Auto ventilation** switch to turn the routine on or off without touching the fan
+- **Ventilation speed** (Low, Medium-low, Medium; default Low) for multi-speed fans, so CO2 ventilation can run quietly instead of at full speed
 - **Safe restarts**: after Home Assistant starts, it waits for your sensors to report (default 2 min), then turns the fan off unless CO2 is already above the on setpoint
 - **Highest CO2** and **Status** sensors for your dashboard
 
@@ -32,6 +33,10 @@ To change sensors, the fan, or the startup delay later, use **Configure** on the
 - If you turn the fan on by hand, it stays on until you turn it off. If CO2 crosses the on setpoint while it's running, auto ventilation takes over and will shut it off when the air is clear.
 - Turning **Auto ventilation** off leaves the fan exactly as it is.
 
+## Ventilation speed
+
+If the fan you pick is a multi-speed `fan` entity (for example an ESPHome fan with `speed_count: 3`), auto ventilation turns it on at the **Ventilation speed**: Low (speed 1) by default, or Medium-low (2) or Medium (3). Changing the speed while auto ventilation is running the fan applies right away. A fan you turned on by hand keeps the speed you gave it. With a switch or input boolean, the speed setting has no effect and the fan simply turns on.
+
 ## Entities
 
 With the default name, the entity IDs are:
@@ -42,6 +47,7 @@ With the default name, the entity IDs are:
 | `number.co2_ventilation_fan_on_at` | On setpoint (ppm) |
 | `number.co2_ventilation_fan_off_at` | Off setpoint (ppm) |
 | `number.co2_ventilation_minimum_run_time` | Minimum run (minutes) |
+| `select.co2_ventilation_ventilation_speed` | Low, Medium-low, or Medium; the speed auto ventilation uses |
 | `sensor.co2_ventilation_highest_co2` | Reading being acted on; `source` attribute names the room |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
 
@@ -51,6 +57,7 @@ The integration ships its own card; there's nothing extra to install. After a re
 
 - Each room's CO2, colored green / amber / red against your setpoints (tap a room for its history)
 - Auto ventilation and HVAC fan toggles, with minutes left on the minimum run
+- Low / Med-low / Medium speed buttons when the fan has speeds (turning the fan on from the card uses the selected speed)
 - Setpoint and minimum run controls, locked by default so a stray touch can't change them. Tap **Unlock**, then drag a slider or tap the number and type a value. They lock again 10 seconds after a change (30 seconds if you don't touch anything).
 - A chart of the last 24 hours with fan run time shaded and live setpoint lines
 
@@ -85,6 +92,7 @@ entities:
   - entity: number.co2_ventilation_fan_on_at
   - entity: number.co2_ventilation_fan_off_at
   - entity: number.co2_ventilation_minimum_run_time
+  - entity: select.co2_ventilation_ventilation_speed
 ```
 
 ### Chart with live setpoint lines

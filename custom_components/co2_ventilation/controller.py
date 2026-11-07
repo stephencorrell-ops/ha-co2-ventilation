@@ -23,6 +23,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
+from homeassistant.util.percentage import ranged_value_to_percentage
 
 from .const import (
     CONF_CO2_SENSORS,
@@ -31,7 +32,9 @@ from .const import (
     DEFAULT_MIN_RUN,
     DEFAULT_OFF_SETPOINT,
     DEFAULT_ON_SETPOINT,
+    DEFAULT_SPEED,
     DEFAULT_STARTUP_DELAY,
+    SPEED_LEVEL,
     STATUS_DISABLED,
     STATUS_HOLDING,
     STATUS_IDLE,
@@ -59,6 +62,7 @@ class Co2VentilationController:
         self.off_setpoint: float = DEFAULT_OFF_SETPOINT
         self.min_run_minutes: float = DEFAULT_MIN_RUN
         self.auto_enabled: bool = True
+        self.speed: str = DEFAULT_SPEED
 
         self.ready = False
         self.max_co2: float | None = None
@@ -205,6 +209,34 @@ class Co2VentilationController:
         state = self.hass.states.get(self.fan_entity)
         return state is not None and state.state == STATE_ON
 
+    def _fan_speed_count(self) -> int:
+        """How many speeds the fan has (0 = not a multi-speed fan)."""
+        if not self.fan_entity or not self.fan_entity.startswith("fan."):
+            return 0
+        state = self.hass.states.get(self.fan_entity)
+        if state is None:
+            return 0
+        step = state.attributes.get("percentage_step")
+        try:
+            step = float(step)
+        except (TypeError, ValueError):
+            return 0
+        if step <= 0 or step >= 100:
+            return 0
+        return max(1, round(100 / step))
+
+    @property
+    def speed_supported(self) -> bool:
+        return self._fan_speed_count() > 1
+
+    def speed_percentage(self) -> int | None:
+        """Fan percentage for the selected speed, or None if not a speed fan."""
+        count = self._fan_speed_count()
+        if count <= 1:
+            return None
+        level = min(SPEED_LEVEL.get(self.speed, 1), count)
+        return ranged_value_to_percentage((1, count), level)
+
     @callback
     def evaluate(self) -> None:
         """Decide what the fan should do now."""
@@ -265,15 +297,24 @@ class Co2VentilationController:
         else:
             self._we_turned_on = False
             self._cancel_pending_off()
-        self.hass.async_create_task(
-            self.hass.services.async_call(
+
+        percentage = self.speed_percentage() if on else None
+        if percentage is not None:
+            # Multi-speed fan: run it at the selected ventilation speed.
+            call = self.hass.services.async_call(
+                "fan",
+                "turn_on",
+                {"entity_id": self.fan_entity, "percentage": percentage},
+                blocking=True,
+            )
+        else:
+            call = self.hass.services.async_call(
                 "homeassistant",
                 "turn_on" if on else "turn_off",
                 {"entity_id": self.fan_entity},
                 blocking=True,
-            ),
-            eager_start=True,
-        )
+            )
+        self.hass.async_create_task(call, eager_start=True)
 
     @callback
     def _update_status(self) -> None:
@@ -294,6 +335,24 @@ class Co2VentilationController:
             self.status = STATUS_IDLE
 
     # ----- setters used by the entities ----------------------------------
+
+    @callback
+    def set_speed(self, speed: str) -> None:
+        """Pick the ventilation speed; applies right away if we're running the fan."""
+        self.speed = speed
+        if self.ready and self._we_turned_on and self._fan_is_on():
+            percentage = self.speed_percentage()
+            if percentage is not None:
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        "fan",
+                        "set_percentage",
+                        {"entity_id": self.fan_entity, "percentage": percentage},
+                        blocking=True,
+                    ),
+                    eager_start=True,
+                )
+        self._notify()
 
     @callback
     def set_auto_enabled(self, enabled: bool) -> None:

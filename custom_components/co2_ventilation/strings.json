@@ -12,7 +12,7 @@
         },
         "data_description": {
           "co2_sensors": "The fan turns on when any of these reaches the on setpoint, and off once all are below the off setpoint.",
-          "fan_entity": "A switch, fan, or input boolean.",
+          "fan_entity": "A switch, fan, or input boolean. With a multi-speed fan, the CO2 routine runs it at the Ventilation speed you pick (low by default).",
           "startup_delay": "After Home Assistant restarts, wait this long for sensors to report, then turn the fan off unless CO2 is already above the on setpoint."
         }
       }
@@ -44,6 +44,12 @@
       "on_setpoint": { "name": "Fan on at" },
       "off_setpoint": { "name": "Fan off at" },
       "min_run": { "name": "Minimum run time" }
+    },
+    "select": {
+      "speed": {
+        "name": "Ventilation speed",
+        "state": { "low": "Low", "medium_low": "Medium-low", "medium": "Medium" }
+      }
     },
     "switch": {
       "auto": { "name": "Auto ventilation" }
