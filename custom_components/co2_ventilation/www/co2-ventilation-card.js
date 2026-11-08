@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.9.0";
+const CARD_VERSION = "0.10.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -18,7 +18,7 @@ const rangeText = (h) => `Last ${RANGES.find(([x]) => x === h)?.[1].replace("7 d
 const SPEED_LABELS = { low: "Low", medium_low: "Med-low", medium: "Medium" };
 const SPEED_LEVEL = { low: 1, medium_low: 2, medium: 3 };
 // Seconds per turn for the spinning fan icon: faster at higher speeds.
-const SPIN_SECONDS = { low: 1.6, medium_low: 1.1, medium: 0.75 };
+const SPIN_SECONDS = { low: 1.6, medium_low: 1.1, medium: 0.75, high: 0.55 };
 const SPIN_CSS = `
   @keyframes co2spin { to { transform: rotate(360deg); } }
   ha-icon.fan { transform-origin: 50% 50%; transition: color .3s; }
@@ -201,7 +201,10 @@ class Co2VentilationCard extends HTMLElement {
 <style>
   :host { --ok:#0ca30c; --warn:#e8a200; --bad:#d03b3b; }${SPIN_CSS}
   ha-card { padding: 16px; }
-  .head { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .head ha-icon { color:var(--secondary-text-color); }
+  .pill.speed { background:var(--secondary-background-color); color:var(--primary-text-color); }
+  .pill.speed[hidden] { display:none; }
   .title { font-size:18px; font-weight:500; flex:1; color:var(--primary-text-color); }
   .pill { font-size:12px; padding:4px 10px; border-radius:999px; white-space:nowrap; }
   .pill.on { background:rgba(237,161,0,.18); color:var(--warning-color,#b37500); }
@@ -251,12 +254,14 @@ class Co2VentilationCard extends HTMLElement {
 <ha-card>
   <div class="head">
     <div class="title">${esc(this._config.title || "CO\u2082 ventilation")}</div>
+    <ha-icon icon="mdi:fan" class="fan" id="fanicon"></ha-icon>
+    <span class="pill speed" id="speedpill" hidden></span>
     <span class="pill" id="status"></span>
   </div>
   <div class="rooms" id="rooms"></div>
   <div class="ctl">
     <div class="row"><ha-icon icon="mdi:robot"></ha-icon><span class="l">Auto</span><span class="grow sub" id="autosub"></span><button class="tg" id="auto" aria-label="Auto ventilation"></button></div>
-    <div class="row"><ha-icon icon="mdi:fan" class="fan" id="fanicon"></ha-icon><span class="l">HVAC fan</span><span class="grow sub" id="fansub"></span><button class="tg" id="fan" aria-label="HVAC fan"></button></div>
+    <div class="row"><ha-icon icon="mdi:fan"></ha-icon><span class="l">HVAC fan</span><span class="grow sub" id="fansub"></span><button class="tg" id="fan" aria-label="HVAC fan"></button></div>
     ${e.speed ? `<div class="row"><ha-icon icon="mdi:fan-speed-1" id="speedicon"></ha-icon><span class="l">Speed</span><div class="seg" id="speed" role="group" aria-label="Ventilation speed">${(this._hass.states[e.speed]?.attributes?.options || Object.keys(SPEED_LABELS)).map((o) => `<button data-o="${esc(o)}">${esc(SPEED_LABELS[o] || o)}</button>`).join("")}</div></div>` : ""}
     <div class="setpts locked" id="setpts">
       <div class="row"><ha-icon icon="mdi:tune-variant"></ha-icon><span class="l">Setpoints</span><span class="grow sub" id="locksub">Locked</span>
@@ -360,6 +365,21 @@ class Co2VentilationCard extends HTMLElement {
     });
   }
 
+  // Which speed the fan is actually running at, from its percentage; falls back
+  // to the selected ventilation speed. Null for a plain on/off fan.
+  _runningSpeed() {
+    const e = this._e, st = this._hass.states[e.fan];
+    if (!e.speed || !e.fan?.startsWith("fan.")) return null;
+    const step = parseFloat(st?.attributes?.percentage_step);
+    const pct = parseFloat(st?.attributes?.percentage);
+    const keys = Object.keys(SPEED_LEVEL);
+    if (Number.isFinite(step) && step > 0 && step < 100 && Number.isFinite(pct) && pct > 0) {
+      const level = Math.max(1, Math.round(pct / step));
+      return keys[level - 1] || "high";
+    }
+    return this._hass.states[e.speed]?.state || null;
+  }
+
   // Same math as the integration: speed N of the fan's steps, as a percentage.
   _speedPercentage() {
     const e = this._e;
@@ -439,7 +459,14 @@ class Co2VentilationCard extends HTMLElement {
     $("autosub").textContent = autoOn ? "" : "Fan won't change on its own";
     const fanOn = hass.states[e.fan]?.state === "on";
     $("fan").classList.toggle("on", fanOn);
-    setSpin($("fanicon"), fanOn, e.speed ? SPIN_SECONDS[hass.states[e.speed]?.state] || 1.1 : 1.1);
+    const running = fanOn ? this._runningSpeed() : null;
+    setSpin($("fanicon"), fanOn, SPIN_SECONDS[running] || 1.1);
+    $("fanicon").setAttribute("aria-label", fanOn ? "Fan running" : "Fan off");
+    $("fanicon").title = fanOn ? "Fan running" : "Fan off";
+    const sp = $("speedpill");
+    const spTxt = running ? SPEED_LABELS[running] || (running === "high" ? "High" : running) : "";
+    sp.hidden = !spTxt;
+    if (sp.textContent !== spTxt) sp.textContent = spTxt;
     const remaining = hass.states[e.status]?.attributes?.min_run_remaining_s || 0;
     $("fansub").textContent = st === "min_run_hold" && remaining ? `${Math.ceil(remaining / 60)} min left` : fanOn ? "Running" : "Off";
     const speedEl = $("speed");
@@ -549,6 +576,7 @@ class Co2VentilationCard extends HTMLElement {
       const d = new Date(t);
       if (d.getHours() % tickEvery) continue;
       const label = tickEvery === 24 ? d.toLocaleDateString([], { weekday: "short" }) : d.getHours() === 0 ? d.toLocaleDateString([], { month: "short", day: "numeric" }) : d.toLocaleTimeString([], { hour: "numeric" });
+      if (x(t) < L + 18 || x(t) > W - R - 22) continue; // would be cut off at the edge
       svg += `<text x="${x(t)}" y="${H - 6}" text-anchor="middle">${esc(label)}</text>`;
     }
 

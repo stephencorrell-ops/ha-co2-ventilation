@@ -4,6 +4,11 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.10.0
+
+- On the **CO2 ventilation card**, the spinning fan moved to the top right next to the status, matching the thermostat card. Beside it, a **speed pill** shows the speed the fan is actually running at (Low, Med-low, Medium). It hides when the fan is off or has no speeds.
+- Chart time labels that would be cut off at the left or right edge are no longer drawn.
+
 ## 0.9.0
 
 - Both cards now show a **spinning fan** while the blower runs. On the CO2 card it's the HVAC fan icon, and it spins faster at Med-low and Medium. On the thermostat card it sits next to the status pill and spins for any thermostat call (fastest during heating or cooling) or for ventilation. It stays still if your device is set to reduce motion.
