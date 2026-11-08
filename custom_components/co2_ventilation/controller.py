@@ -26,9 +26,12 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.percentage import ranged_value_to_percentage
 
 from .const import (
+    CONF_CALL_G,
+    CONF_CALL_W2,
     CONF_CO2_SENSORS,
     CONF_FAN_ENTITY,
     CONF_STARTUP_DELAY,
+    CONF_THERMOSTAT,
     DEFAULT_MIN_RUN,
     DEFAULT_OFF_SETPOINT,
     DEFAULT_ON_SETPOINT,
@@ -42,7 +45,9 @@ from .const import (
     STATUS_NO_DATA,
     STATUS_STARTING,
     STATUS_VENTILATING,
+    THERMOSTAT_KEYS,
 )
+from .runtime import FanRuntimeTracker
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +80,7 @@ class Co2VentilationController:
         self._startup_timer: CALLBACK_TYPE | None = None
         self._unsubs: list[CALLBACK_TYPE] = []
         self._listeners: list[Callable[[], None]] = []
+        self.runtime = FanRuntimeTracker(hass, self._runtime_watched)
 
     # ----- configuration -------------------------------------------------
 
@@ -92,6 +98,17 @@ class Co2VentilationController:
     @property
     def startup_delay(self) -> float:
         return float(self._conf(CONF_STARTUP_DELAY, DEFAULT_STARTUP_DELAY))
+
+    @property
+    def thermostat(self) -> dict[str, str | None]:
+        """Optional thermostat entities (Nest climate, sensors, 24 V call inputs)."""
+        section = self._conf(CONF_THERMOSTAT) or {}
+        return {key: section.get(key) or None for key in THERMOSTAT_KEYS}
+
+    def _runtime_watched(self) -> list[str]:
+        """Entities that mean the blower is running when any of them is on."""
+        t = self.thermostat
+        return [e for e in (t[CONF_CALL_G], t[CONF_CALL_W2], self.fan_entity) if e]
 
     # ----- listeners for entities ----------------------------------------
 
@@ -133,12 +150,14 @@ class Co2VentilationController:
             # Home Assistant is booting: wait for sensors to report, then
             # default the fan to off unless CO2 is already high.
             self._unsubs.append(async_at_started(self.hass, self._on_started))
+        self.runtime.async_start()
         self._recompute()
         self._update_status()
         self._notify()
 
     @callback
     def async_stop(self) -> None:
+        self.runtime.async_stop()
         self._cancel_pending_off()
         if self._startup_timer:
             self._startup_timer()

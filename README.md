@@ -8,6 +8,8 @@ Runs your HVAC fan (or any switch, fan, or input boolean) when indoor CO2 gets h
 - **Ventilation speed** (Low, Medium-low, Medium; default Low) for multi-speed fans, so CO2 ventilation can run quietly instead of at full speed
 - **Safe restarts**: after Home Assistant starts, it waits for your sensors to report (default 2 min), then turns the fan off unless CO2 is already above the on setpoint
 - **Highest CO2** and **Status** sensors for your dashboard
+- **Fan runtime**: hours since the last filter change (with a reset button) and a lifetime total
+- **Thermostat history card** showing what the thermostat is doing, with temperature, humidity and CO2
 
 ## Install with HACS
 
@@ -49,7 +51,30 @@ With the default name, the entity IDs are:
 | `number.co2_ventilation_minimum_run_time` | Minimum run (minutes) |
 | `select.co2_ventilation_ventilation_speed` | Low, Medium-low, or Medium; the speed auto ventilation uses |
 | `sensor.co2_ventilation_highest_co2` | Reading being acted on; `source` attribute names the room |
+| `sensor.co2_ventilation_fan_runtime_since_filter_change` | Blower hours since the filter was last reset |
+| `sensor.co2_ventilation_fan_runtime_total` | Lifetime blower hours (never resets) |
+| `button.co2_ventilation_reset_filter_runtime` | Press after changing the filter |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
+
+## Thermostat and fan runtime
+
+Under **Configure**, the optional **Thermostat** section takes:
+
+- **Thermostat**: your climate entity (for example the Nest), used for the setpoint and as a fallback for temperature and humidity
+- **Temperature sensor** and **Humidity sensor**: for example the Nest's own sensors
+- **Fan call (G)**, **Compressor call (Y)**, **Reversing valve (O, on in cooling)**, **Heat strips (W2/AUX)**: binary sensors for the 24 V thermostat signals, for example from an ESPHome board at the air handler
+
+The blower counts as running whenever the fan call, the heat strip call, or the ventilation fan is on. Without the call inputs, only the ventilation fan is counted.
+
+### Thermostat history card
+
+Add **CO2 Ventilation: thermostat history** from **Add card**, or use `type: custom:co2-thermostat-card`. It shows the current calls, temperature, humidity and highest CO2, a timeline of heat pump, heat strip, cooling, fan only and ventilation runs, three charts on the same time axis with those runs shaded behind them, run totals for the window, and the fan runtime counters with a two-tap filter reset.
+
+```yaml
+type: custom:co2-thermostat-card
+hours: 24          # 6, 24 or 168; the card has buttons for these too
+title: Thermostat  # optional
+```
 
 ## Dashboard card
 

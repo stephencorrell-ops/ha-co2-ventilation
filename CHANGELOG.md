@@ -4,6 +4,12 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.6.0
+
+- New **thermostat history card** (CO2 Ventilation: thermostat history). It shows what the thermostat is calling for right now (G, Y, O, W2 and the ventilation fan), current temperature, humidity and CO2, and a 6 hour, 24 hour or 7 day timeline of heat pump, heat strip, cooling, fan and ventilation runs with temperature, humidity and CO2 charts underneath. Hover or tap the chart for the readings at any moment.
+- **Fan runtime counters**: hours the blower has run since the last filter change, and a lifetime total that never resets. Press **Reset filter runtime** (or the button on the card) after a filter change.
+- New optional **Thermostat** section under Configure: pick your thermostat, temperature and humidity sensors, and the four 24 V call inputs. Everything here is optional, and without it the runtime counters count the ventilation fan only.
+
 ## 0.5.0
 
 - New **Ventilation speed** setting (Low, Medium-low, Medium). With a multi-speed fan, auto ventilation now runs it at the selected speed, Low by default, instead of whatever speed the fan last used. Changing the speed while it's ventilating applies right away; a fan turned on by hand is left at its own speed.

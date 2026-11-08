@@ -8,6 +8,25 @@ CONF_CO2_SENSORS = "co2_sensors"
 CONF_FAN_ENTITY = "fan_entity"
 CONF_STARTUP_DELAY = "startup_delay"
 
+# Optional thermostat monitoring, set under a collapsible "Thermostat" section.
+CONF_THERMOSTAT = "thermostat"
+CONF_CLIMATE = "climate_entity"
+CONF_TEMPERATURE = "temperature_sensor"
+CONF_HUMIDITY = "humidity_sensor"
+CONF_CALL_G = "call_g"
+CONF_CALL_Y = "call_y"
+CONF_CALL_OB = "call_ob"
+CONF_CALL_W2 = "call_w2"
+THERMOSTAT_KEYS = (
+    CONF_CLIMATE,
+    CONF_TEMPERATURE,
+    CONF_HUMIDITY,
+    CONF_CALL_G,
+    CONF_CALL_Y,
+    CONF_CALL_OB,
+    CONF_CALL_W2,
+)
+
 DEFAULT_NAME = "CO2 Ventilation"
 DEFAULT_ON_SETPOINT = 900
 DEFAULT_OFF_SETPOINT = 700

@@ -14,6 +14,21 @@
           "co2_sensors": "The fan turns on when any of these reaches the on setpoint, and off once all are below the off setpoint.",
           "fan_entity": "A switch, fan, or input boolean. With a multi-speed fan, the CO2 routine runs it at the Ventilation speed you pick (low by default).",
           "startup_delay": "After Home Assistant restarts, wait this long for sensors to report, then turn the fan off unless CO2 is already above the on setpoint."
+        },
+        "sections": {
+          "thermostat": {
+            "name": "Thermostat (optional)",
+            "description": "For the thermostat history card and the fan runtime counters. The four call inputs are the 24 V thermostat signals, for example from an ESPHome board at the air handler.",
+            "data": {
+              "climate_entity": "Thermostat",
+              "temperature_sensor": "Temperature sensor",
+              "humidity_sensor": "Humidity sensor",
+              "call_g": "Fan call (G)",
+              "call_y": "Compressor call (Y)",
+              "call_ob": "Reversing valve (O, on in cooling)",
+              "call_w2": "Heat strips (W2/AUX)"
+            }
+          }
         }
       }
     },
@@ -32,6 +47,21 @@
           "co2_sensors": "CO2 sensors",
           "fan_entity": "Fan to control",
           "startup_delay": "Startup delay"
+        },
+        "sections": {
+          "thermostat": {
+            "name": "Thermostat (optional)",
+            "description": "For the thermostat history card and the fan runtime counters. The four call inputs are the 24 V thermostat signals, for example from an ESPHome board at the air handler.",
+            "data": {
+              "climate_entity": "Thermostat",
+              "temperature_sensor": "Temperature sensor",
+              "humidity_sensor": "Humidity sensor",
+              "call_g": "Fan call (G)",
+              "call_y": "Compressor call (Y)",
+              "call_ob": "Reversing valve (O, on in cooling)",
+              "call_w2": "Heat strips (W2/AUX)"
+            }
+          }
         }
       }
     },
@@ -54,8 +84,13 @@
     "switch": {
       "auto": { "name": "Auto ventilation" }
     },
+    "button": {
+      "reset_filter": { "name": "Reset filter runtime" }
+    },
     "sensor": {
       "highest_co2": { "name": "Highest CO2" },
+      "filter_runtime": { "name": "Fan runtime since filter change" },
+      "total_runtime": { "name": "Fan runtime total" },
       "status": {
         "name": "Status",
         "state": {

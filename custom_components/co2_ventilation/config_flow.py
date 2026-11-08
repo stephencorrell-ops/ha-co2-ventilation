@@ -15,12 +15,21 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_CALL_G,
+    CONF_CALL_OB,
+    CONF_CALL_W2,
+    CONF_CALL_Y,
+    CONF_CLIMATE,
     CONF_CO2_SENSORS,
     CONF_FAN_ENTITY,
+    CONF_HUMIDITY,
     CONF_STARTUP_DELAY,
+    CONF_TEMPERATURE,
+    CONF_THERMOSTAT,
     DEFAULT_NAME,
     DEFAULT_STARTUP_DELAY,
     DOMAIN,
@@ -64,7 +73,42 @@ def _schema(defaults: dict[str, Any], include_name: bool) -> vol.Schema:
             mode=selector.NumberSelectorMode.BOX,
         )
     )
+    fields[vol.Optional(CONF_THERMOSTAT)] = section(
+        _thermostat_schema(defaults.get(CONF_THERMOSTAT) or {}),
+        {"collapsed": True},
+    )
     return vol.Schema(fields)
+
+
+def _optional(key: str, current: dict[str, Any]) -> vol.Optional:
+    value = current.get(key)
+    return vol.Optional(key, description={"suggested_value": value} if value else None)
+
+
+def _thermostat_schema(current: dict[str, Any]) -> vol.Schema:
+    """Optional entities for the thermostat history card and fan runtime."""
+    call = selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor"))
+    return vol.Schema(
+        {
+            _optional(CONF_CLIMATE, current): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="climate")
+            ),
+            _optional(CONF_TEMPERATURE, current): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain="sensor", device_class=SensorDeviceClass.TEMPERATURE
+                )
+            ),
+            _optional(CONF_HUMIDITY, current): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain="sensor", device_class=SensorDeviceClass.HUMIDITY
+                )
+            ),
+            _optional(CONF_CALL_G, current): call,
+            _optional(CONF_CALL_Y, current): call,
+            _optional(CONF_CALL_OB, current): call,
+            _optional(CONF_CALL_W2, current): call,
+        }
+    )
 
 
 class Co2VentilationConfigFlow(ConfigFlow, domain=DOMAIN):
