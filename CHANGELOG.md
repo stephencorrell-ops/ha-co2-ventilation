@@ -4,6 +4,10 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.8.0
+
+- The **CO2 ventilation card** now has the same **6 h / 24 h / 7 d** buttons as the thermostat card to change the chart's time span. The card's `hours:` setting still picks which one it opens on.
+
 ## 0.7.0
 
 - New **Last filter change** date. Pressing reset sets it to today; you can also type in an earlier date (for a change made before the counters existed) without touching the runtime hours. Future dates are refused.

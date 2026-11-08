@@ -85,14 +85,14 @@ The integration ships its own card; there's nothing extra to install. After a re
 - Auto ventilation and HVAC fan toggles, with minutes left on the minimum run
 - Low / Med-low / Medium speed buttons when the fan has speeds (turning the fan on from the card uses the selected speed)
 - Setpoint and minimum run controls, locked by default so a stray touch can't change them. Tap **Unlock**, then drag a slider or tap the number and type a value. They lock again 10 seconds after a change (30 seconds if you don't touch anything).
-- A chart of the last 24 hours with fan run time shaded and live setpoint lines
+- A chart of the last 6 hours, 24 hours or 7 days (buttons on the card) with fan run time shaded and live setpoint lines
 
 Options, all optional:
 
 ```yaml
 type: custom:co2-ventilation-card
 title: CO₂ ventilation
-hours: 24                 # chart span
+hours: 24                 # starting chart span: 6, 24 or 168; the card has buttons for these too
 show_chart: true
 extra_sensors:            # rooms to show but not control the fan
   - sensor.basement_co2_carbon_dioxide

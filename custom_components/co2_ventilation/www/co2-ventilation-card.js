@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.7.0";
+const CARD_VERSION = "0.8.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -13,6 +13,8 @@ const STATUS_TEXT = {
   manual: "Fan on manually",
   no_data: "No sensor data",
 };
+const RANGES = [[6, "6 h"], [24, "24 h"], [168, "7 d"]];
+const rangeText = (h) => `Last ${RANGES.find(([x]) => x === h)?.[1].replace("7 d", "7 days").replace(" h", " hours") || h + " hours"}`;
 const SPEED_LABELS = { low: "Low", medium_low: "Med-low", medium: "Medium" };
 const SPEED_LEVEL = { low: 1, medium_low: 2, medium: 3 };
 const STATUS_TONE = {
@@ -44,6 +46,7 @@ class Co2VentilationCard extends HTMLElement {
 
   setConfig(config) {
     this._config = { hours: 24, show_chart: true, ...config };
+    this._hours = Number(this._config.hours) || 24;
     this._built = false;
     this._history = null;
     this._historyAt = 0;
@@ -136,7 +139,8 @@ class Co2VentilationCard extends HTMLElement {
     if (!e) return;
     const ids = [...new Set([...e.sensors, e.fan].filter(Boolean))];
     const end = new Date();
-    const start = new Date(end.getTime() - this._config.hours * 3600 * 1000);
+    const hours = this._hours;
+    const start = new Date(end.getTime() - hours * 3600 * 1000);
     try {
       const res = await this._hass.callWS({
         type: "history/history_during_period",
@@ -154,8 +158,10 @@ class Co2VentilationCard extends HTMLElement {
           s: p.s ?? p.state,
         }));
       }
+      if (hours !== this._hours) return; // a newer range was picked while this loaded
       this._history = { start: start.getTime(), end: end.getTime(), data: out };
     } catch (err) {
+      if (hours !== this._hours) return;
       this._history = { error: err?.message || "History unavailable" };
     }
     this._renderChart();
@@ -222,6 +228,8 @@ class Co2VentilationCard extends HTMLElement {
   .seg button { border:1px solid var(--divider-color); background:transparent; color:var(--primary-text-color); border-radius:16px; padding:4px 12px; font:inherit; font-size:13px; cursor:pointer; }
   .seg button.on { background:var(--primary-color); border-color:var(--primary-color); color:var(--text-primary-color,#fff); }
   .chart { margin-top:12px; border-top:1px solid var(--divider-color); padding-top:10px; }
+  .rbar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  .rbar .seg { flex:0 0 auto; }
   .legend { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:12px; color:var(--secondary-text-color); margin-bottom:4px; }
   .legend span { display:flex; align-items:center; gap:4px; }
   .legend i { width:10px; height:10px; border-radius:2px; display:inline-block; }
@@ -245,7 +253,7 @@ class Co2VentilationCard extends HTMLElement {
       ${this._sliderRow("min", "mdi:timer-outline", "Minimum run", e.min)}
     </div>
   </div>
-  ${this._config.show_chart ? `<div class="chart"><div class="legend" id="legend"></div><div id="svg"></div></div>` : ""}
+  ${this._config.show_chart ? `<div class="chart"><div class="rbar"><span class="sub" id="rangetxt"></span><span class="seg" id="range" role="group" aria-label="Chart range">${RANGES.map(([h, l]) => `<button data-h="${h}">${l}</button>`).join("")}</span></div><div class="legend" id="legend"></div><div id="svg"></div></div>` : ""}
 </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
     $("auto").addEventListener("click", () => e.auto && this._call("switch", "toggle", { entity_id: e.auto }));
@@ -261,6 +269,19 @@ class Co2VentilationCard extends HTMLElement {
     $("speed")?.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", () => this._call("select", "select_option", { entity_id: e.speed, option: b.dataset.o }))
     );
+    $("range")?.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => {
+        const h = Number(b.dataset.h);
+        if (h === this._hours) return;
+        this._hours = h;
+        this._history = null;
+        this._historyAt = Date.now();
+        this._updateRange();
+        this._renderChart();
+        this._loadHistory();
+      })
+    );
+    this._updateRange();
     $("lock").addEventListener("click", () => this._setLocked(!this._locked));
     this._setLocked(true);
     for (const key of ["on", "off", "min"]) {
@@ -314,6 +335,16 @@ class Co2VentilationCard extends HTMLElement {
     }
     this._built = true;
     this._renderChart();
+  }
+
+  _updateRange() {
+    const txt = this.shadowRoot.getElementById("rangetxt");
+    if (txt) txt.textContent = rangeText(this._hours);
+    this.shadowRoot.getElementById("range")?.querySelectorAll("button").forEach((b) => {
+      const on = Number(b.dataset.h) === this._hours;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
   }
 
   // Same math as the integration: speed N of the fan's steps, as a percentage.
@@ -448,11 +479,12 @@ class Co2VentilationCard extends HTMLElement {
     const W = 600, H = 220, L = 40, R = 8, T = 8, B = 22;
     const on = this._num(e.on, 900), off = this._num(e.off, 700);
     const end = Date.now();
-    const start = end - this._config.hours * 3600 * 1000;
+    const hours = this._hours;
+    const start = end - hours * 3600 * 1000;
     const x = (t) => L + ((t - start) / (end - start)) * (W - L - R);
 
-    // 5-minute bucket averages, carrying the last value forward.
-    const step = 5 * 60 * 1000;
+    // Bucket averages (5 min, or 30 min over 7 days), carrying the last value forward.
+    const step = (hours > 24 ? 30 : 5) * 60 * 1000;
     const series = e.sensors.map((id) => {
       const pts = (h.data[id] || []).map((p) => ({ t: p.t, v: parseFloat(p.s) })).filter((p) => Number.isFinite(p.v));
       const out = [];
@@ -476,7 +508,7 @@ class Co2VentilationCard extends HTMLElement {
     const minV = 400;
     const y = (v) => T + (1 - (Math.max(minV, v) - minV) / (maxV - minV)) * (H - T - B);
 
-    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="CO2 by room over the last ${this._config.hours} hours with fan run time shaded">`;
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="CO2 by room over the ${rangeText(hours).toLowerCase()} with fan run time shaded">`;
 
     // fan on spans
     const fanPts = (h.data[e.fan] || []).filter((p) => p.s === "on" || p.s === "off");
@@ -496,13 +528,13 @@ class Co2VentilationCard extends HTMLElement {
       svg += `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
     }
     const hourMs = 3600 * 1000;
-    const tickEvery = this._config.hours > 12 ? 4 : 2;
+    const tickEvery = hours > 24 ? 24 : hours > 12 ? 4 : 1;
     const first = new Date(start);
     first.setMinutes(0, 0, 0);
     for (let t = first.getTime() + hourMs; t < end; t += hourMs) {
       const d = new Date(t);
       if (d.getHours() % tickEvery) continue;
-      const label = d.getHours() === 0 ? d.toLocaleDateString([], { month: "short", day: "numeric" }) : d.toLocaleTimeString([], { hour: "numeric" });
+      const label = tickEvery === 24 ? d.toLocaleDateString([], { weekday: "short" }) : d.getHours() === 0 ? d.toLocaleDateString([], { month: "short", day: "numeric" }) : d.toLocaleTimeString([], { hour: "numeric" });
       svg += `<text x="${x(t)}" y="${H - 6}" text-anchor="middle">${esc(label)}</text>`;
     }
 
@@ -529,7 +561,7 @@ if (!customElements.get("co2-ventilation-card")) {
   window.customCards.push({
     type: "co2-ventilation-card",
     name: "CO2 Ventilation",
-    description: "Room CO2, fan control and speed, setpoint sliders, and a 24-hour chart.",
+    description: "Room CO2, fan control and speed, setpoint sliders, and a 6 hour, 24 hour or 7 day chart.",
     preview: false,
     documentationURL: "https://github.com/stephencorrell-ops/ha-co2-ventilation",
   });
@@ -544,7 +576,6 @@ const MODES = ["heat", "strips", "cool", "fan", "vent"];
 const MODE_COLOR = { heat: "#eb6834", strips: "#e34948", cool: "#2a78d6", fan: "#888780", vent: "#1baf7a" };
 const MODE_LABEL = { heat: "Heat pump", strips: "Heat strips", cool: "Cooling", fan: "Fan only", vent: "CO₂ ventilation" };
 const MODE_LANE = { heat: "Heat", strips: "Strips", cool: "Cool", fan: "Fan", vent: "Vent" };
-const RANGES = [[6, "6 h"], [24, "24 h"], [168, "7 d"]];
 
 // Decide what the system is doing from the 24 V calls (O is on in cooling).
 const modesFrom = (g, y, o, w2, vent) => {
