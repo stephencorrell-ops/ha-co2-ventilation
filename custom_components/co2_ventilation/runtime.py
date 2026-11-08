@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from homeassistant.const import STATE_ON
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -30,6 +30,9 @@ class FanRuntimeTracker:
         self.filter_seconds: float = 0.0
         self.total_seconds: float = 0.0
         self.filter_reset_at: datetime | None = None
+        # The day the filter was last changed. Set to today by a reset, or
+        # entered by hand (a change made before the counters existed).
+        self.filter_changed: date | None = None
         self._last_tick: datetime | None = None
         self._unsubs: list[CALLBACK_TYPE] = []
         self._listeners: list[Callable[[], None]] = []
@@ -110,4 +113,11 @@ class FanRuntimeTracker:
         self._accumulate()
         self.filter_seconds = 0.0
         self.filter_reset_at = dt_util.utcnow()
+        self.filter_changed = dt_util.now().date()
+        self._notify()
+
+    @callback
+    def set_filter_changed(self, day: date) -> None:
+        """Record when the filter was changed without touching the hour count."""
+        self.filter_changed = day
         self._notify()

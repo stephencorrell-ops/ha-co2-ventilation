@@ -128,4 +128,6 @@ class FanRuntimeSensor(Co2VentilationEntity, RestoreSensor):
         if self._is_filter:
             reset = runtime.filter_reset_at
             attrs["last_reset_at"] = reset.isoformat() if reset else None
+            changed = runtime.filter_changed
+            attrs["filter_changed"] = changed.isoformat() if changed else None
         return attrs

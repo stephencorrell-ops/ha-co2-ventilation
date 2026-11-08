@@ -87,6 +87,9 @@
     "button": {
       "reset_filter": { "name": "Reset filter runtime" }
     },
+    "date": {
+      "filter_changed": { "name": "Last filter change" }
+    },
     "sensor": {
       "highest_co2": { "name": "Highest CO2" },
       "filter_runtime": { "name": "Fan runtime since filter change" },
@@ -107,6 +110,7 @@
   },
   "exceptions": {
     "on_below_off": { "message": "The on setpoint must be above the off setpoint ({off} ppm)." },
+    "filter_date_future": { "message": "The filter change date can't be in the future." },
     "off_above_on": { "message": "The off setpoint must be below the on setpoint ({on} ppm)." }
   }
 }

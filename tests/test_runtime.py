@@ -163,3 +163,46 @@ async def test_user_flow_without_thermostat(hass: HomeAssistant) -> None:
         {"name": "House CO2", "co2_sensors": ["sensor.bedroom"], "fan_entity": "switch.x", "startup_delay": 120},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+DATE = "date.co2_ventilation_last_filter_change"
+
+
+async def test_reset_sets_filter_date_to_today(hass: HomeAssistant, freezer) -> None:
+    await _setup(hass, {"call_g": G})
+    assert hass.states.get(DATE).state == "unknown"
+    await hass.services.async_call("button", "press", {"entity_id": RESET}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(DATE).state == dt_util.now().date().isoformat()
+    assert hass.states.get(FILTER).attributes["filter_changed"] == dt_util.now().date().isoformat()
+
+
+async def test_filter_date_can_be_set_without_resetting_hours(hass: HomeAssistant, freezer) -> None:
+    await _setup(hass, {"call_g": G})
+    hass.states.async_set(G, "on")
+    await hass.async_block_till_done()
+    await _advance(hass, freezer, 90)
+
+    past = (dt_util.now() - timedelta(days=12)).date().isoformat()
+    await hass.services.async_call("date", "set_value", {"entity_id": DATE, "date": past}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(DATE).state == past
+    assert abs(_hours(hass, FILTER) - 1.5) < 0.02
+
+
+async def test_filter_date_cannot_be_in_future(hass: HomeAssistant) -> None:
+    import pytest
+    from homeassistant.exceptions import ServiceValidationError
+
+    await _setup(hass)
+    future = (dt_util.now() + timedelta(days=3)).date().isoformat()
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call("date", "set_value", {"entity_id": DATE, "date": future}, blocking=True)
+
+
+async def test_filter_date_survives_restart(hass: HomeAssistant) -> None:
+    from pytest_homeassistant_custom_component.common import mock_restore_cache
+
+    mock_restore_cache(hass, [State(DATE, "2026-10-20")])
+    await _setup(hass)
+    assert hass.states.get(DATE).state == "2026-10-20"

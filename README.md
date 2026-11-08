@@ -53,7 +53,8 @@ With the default name, the entity IDs are:
 | `sensor.co2_ventilation_highest_co2` | Reading being acted on; `source` attribute names the room |
 | `sensor.co2_ventilation_fan_runtime_since_filter_change` | Blower hours since the filter was last reset |
 | `sensor.co2_ventilation_fan_runtime_total` | Lifetime blower hours (never resets) |
-| `button.co2_ventilation_reset_filter_runtime` | Press after changing the filter |
+| `button.co2_ventilation_reset_filter_runtime` | Press after changing the filter; also sets the date below to today |
+| `date.co2_ventilation_last_filter_change` | When the filter was last changed; set it by hand for an earlier change |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
 
 ## Thermostat and fan runtime

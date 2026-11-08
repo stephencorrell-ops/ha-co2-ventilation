@@ -4,6 +4,12 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.7.0
+
+- New **Last filter change** date. Pressing reset sets it to today; you can also type in an earlier date (for a change made before the counters existed) without touching the runtime hours. Future dates are refused.
+- The card shows the date and how many days ago it was, with **Change date** to edit it.
+- **Reset filter** on the card now asks before resetting, with Cancel and Reset buttons, instead of a tap-twice button.
+
 ## 0.6.0
 
 - New **thermostat history card** (CO2 Ventilation: thermostat history). It shows what the thermostat is calling for right now (G, Y, O, W2 and the ventilation fan), current temperature, humidity and CO2, and a 6 hour, 24 hour or 7 day timeline of heat pump, heat strip, cooling, fan and ventilation runs with temperature, humidity and CO2 charts underneath. Hover or tap the chart for the readings at any moment.

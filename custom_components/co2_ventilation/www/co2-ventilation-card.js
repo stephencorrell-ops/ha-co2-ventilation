@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.6.0";
+const CARD_VERSION = "0.7.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -564,6 +564,8 @@ const fmtDur = (ms) => {
   return m ? `${h} h ${m} m` : `${h} h`;
 };
 
+const localISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 const fmtHours = (h) => {
   if (!Number.isFinite(h)) return "—";
   return h < 10 ? h.toFixed(1) : Math.round(h).toLocaleString();
@@ -642,6 +644,7 @@ class Co2ThermostatCard extends HTMLElement {
       filter: byKey("filter_runtime"),
       total: byKey("total_runtime"),
       reset: byKey("reset_filter"),
+      fdate: byKey("filter_changed"),
     };
   }
 
@@ -833,6 +836,13 @@ class Co2ThermostatCard extends HTMLElement {
   .dot { width:8px; height:8px; border-radius:50%; background:var(--divider-color); display:inline-block; }
   .dot.on { background:#1baf7a; }
   .btn.warn { border-color:var(--error-color,#d03b3b); color:var(--error-color,#d03b3b); }
+  .btn.solid { background:var(--error-color,#d03b3b); border-color:var(--error-color,#d03b3b); color:#fff; }
+  .link { background:none; border:none; padding:0; font:inherit; font-size:12px; color:var(--primary-color); cursor:pointer; }
+  .panel { grid-column:1 / -1; display:none; align-items:center; flex-wrap:wrap; gap:8px; background:var(--secondary-background-color); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--primary-text-color); }
+  .panel.open { display:flex; }
+  .panel .msg { flex:1 1 220px; }
+  .panel input[type=date] { font:inherit; font-size:13px; color:var(--primary-text-color); background:var(--card-background-color); border:1px solid var(--divider-color); border-radius:6px; padding:4px 6px; color-scheme:light dark; }
+  .panel .err { flex-basis:100%; font-size:12px; color:var(--error-color,#d03b3b); }
   .note { font-size:13px; color:var(--secondary-text-color); padding:4px 0 8px; }
   svg text { font-size:11px; fill:var(--secondary-text-color); font-family:inherit; }
   @media (max-width: 480px) { .stats { grid-template-columns:1fr 1fr; } .totals { grid-template-columns:1fr 1fr; } }
@@ -851,9 +861,19 @@ class Co2ThermostatCard extends HTMLElement {
   <div class="chart" id="chart"><div id="svg"></div><div class="tip" id="tip"></div></div>
   <div class="totals" id="totals"></div>
   ${e.filter || e.total ? `<div class="run">
-    <div><div class="k"><span class="dot" id="rundot"></span>Since filter change</div><div class="v" id="v_filter"></div><div class="s" id="s_filter"></div></div>
+    <div><div class="k"><span class="dot" id="rundot"></span>Since filter change</div><div class="v" id="v_filter"></div><div class="s"><span id="s_filter"></span>${e.fdate ? ` \u00b7 <button class="link" id="editdate">Change date</button>` : ""}</div></div>
     <div><div class="k">Total fan runtime</div><div class="v" id="v_total"></div><div class="s">Since the motor was installed</div></div>
     ${e.reset ? `<button class="btn" id="reset">Reset filter</button>` : "<span></span>"}
+    <div class="panel" id="confirm" role="alertdialog" aria-label="Confirm filter reset">
+      <span class="msg">Reset the filter runtime to 0 h and set the last change to today?</span>
+      <button class="btn" id="confirm_no">Cancel</button><button class="btn solid" id="confirm_yes">Reset</button>
+    </div>
+    <div class="panel" id="datepanel">
+      <span class="msg">Last filter change</span>
+      <input type="date" id="dateinput" aria-label="Last filter change date">
+      <button class="btn" id="date_no">Cancel</button><button class="btn" id="date_yes">Save</button>
+      <span class="err" id="dateerr"></span>
+    </div>
   </div>` : ""}
 </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
@@ -870,28 +890,42 @@ class Co2ThermostatCard extends HTMLElement {
     $("st_temp").addEventListener("click", () => this._moreInfo(e.temp || e.climate));
     $("st_hum").addEventListener("click", () => this._moreInfo(e.hum || e.climate));
     $("st_co2").addEventListener("click", () => this._moreInfo(e.highest));
-    const reset = $("reset");
-    if (reset) {
-      reset.addEventListener("click", () => {
-        if (!this._confirmReset) {
-          this._confirmReset = true;
-          reset.textContent = "Tap to confirm";
-          reset.classList.add("warn");
-          clearTimeout(this._resetTimer);
-          this._resetTimer = setTimeout(() => {
-            this._confirmReset = false;
-            reset.textContent = "Reset filter";
-            reset.classList.remove("warn");
-          }, 5000);
-          return;
-        }
-        this._confirmReset = false;
-        clearTimeout(this._resetTimer);
-        reset.textContent = "Reset filter";
-        reset.classList.remove("warn");
-        this._call("button", "press", { entity_id: e.reset });
-      });
-    }
+    const panel = (id, open) => $(id)?.classList.toggle("open", open);
+    $("reset")?.addEventListener("click", () => {
+      panel("datepanel", false);
+      panel("confirm", true);
+    });
+    $("confirm_no")?.addEventListener("click", () => panel("confirm", false));
+    $("confirm_yes")?.addEventListener("click", () => {
+      panel("confirm", false);
+      this._call("button", "press", { entity_id: e.reset });
+    });
+    $("editdate")?.addEventListener("click", () => {
+      panel("confirm", false);
+      const input = $("dateinput");
+      const today = localISO(new Date());
+      input.max = today;
+      const cur = this._hass.states[e.fdate]?.state;
+      input.value = /^\d{4}-\d{2}-\d{2}$/.test(cur || "") ? cur : today;
+      $("dateerr").textContent = "";
+      panel("datepanel", true);
+      input.focus();
+    });
+    $("dateinput")?.addEventListener("input", () => ($("dateerr").textContent = ""));
+    $("date_no")?.addEventListener("click", () => panel("datepanel", false));
+    $("date_yes")?.addEventListener("click", async () => {
+      const v = $("dateinput").value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        $("dateerr").textContent = "Pick a date first.";
+        return;
+      }
+      if (v > localISO(new Date())) {
+        $("dateerr").textContent = "The date can't be in the future.";
+        return;
+      }
+      panel("datepanel", false);
+      await this._call("date", "set_value", { entity_id: e.fdate, date: v });
+    });
     const chart = $("chart");
     const move = (ev) => {
       const svg = chart.querySelector("svg");
@@ -956,8 +990,19 @@ class Co2ThermostatCard extends HTMLElement {
       const f = this._num(e.filter), tot = this._num(e.total);
       $("v_filter").innerHTML = `${fmtHours(f)}<small> h</small>`;
       $("v_total").innerHTML = `${fmtHours(tot)}<small> h</small>`;
+      const changed = hass.states[e.fdate]?.state;
       const reset = hass.states[e.filter]?.attributes?.last_reset_at;
-      $("s_filter").textContent = reset ? `Since ${new Date(reset).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}` : "Not reset yet";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(changed || "")) {
+        const [yy, mm, dd] = changed.split("-").map(Number);
+        const d = new Date(yy, mm - 1, dd);
+        const days = Math.round((new Date().setHours(0, 0, 0, 0) - d.getTime()) / 86400000);
+        const ago = days <= 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
+        $("s_filter").textContent = `Changed ${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}, ${ago}`;
+      } else if (reset) {
+        $("s_filter").textContent = `Since ${new Date(reset).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+      } else {
+        $("s_filter").textContent = "Change date not set";
+      }
       $("rundot").classList.toggle("on", !!hass.states[e.total]?.attributes?.running);
     }
 
