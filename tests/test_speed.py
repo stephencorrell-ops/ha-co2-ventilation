@@ -88,7 +88,7 @@ async def test_default_speed_is_low(hass: HomeAssistant) -> None:
     calls = await _setup(hass)
     state = hass.states.get(SPEED)
     assert state.state == "low"
-    assert state.attributes["options"] == ["low", "medium_low", "medium"]
+    assert state.attributes["options"] == ["low", "medium_low", "medium", "medium_high"]
     assert state.attributes["speed_supported"] is True
 
     _co2(hass, "sensor.bedroom", 950)

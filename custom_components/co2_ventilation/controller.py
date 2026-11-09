@@ -26,8 +26,23 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.percentage import ranged_value_to_percentage
 
 from .const import (
+    ACTIVITY_AUX_HEAT,
+    ACTIVITY_COOLING,
+    ACTIVITY_FAN_MANUAL,
+    ACTIVITY_FAN_ONLY,
+    ACTIVITY_HEAT_PUMP,
+    ACTIVITY_HEAT_PUMP_AUX,
+    ACTIVITY_IDLE,
+    ACTIVITY_VENTILATING,
+    AUX_HEAT_LEVEL,
+    CALLER_CO2,
+    CALLER_MANUAL,
+    CALLER_THERMOSTAT,
     CONF_CALL_G,
+    CONF_CALL_OB,
     CONF_CALL_W2,
+    CONF_CALL_Y,
+    CONF_CLIMATE,
     CONF_CO2_SENSORS,
     CONF_FAN_ENTITY,
     CONF_STARTUP_DELAY,
@@ -37,7 +52,9 @@ from .const import (
     DEFAULT_ON_SETPOINT,
     DEFAULT_SPEED,
     DEFAULT_STARTUP_DELAY,
+    SPEED_BY_LEVEL,
     SPEED_LEVEL,
+    THERMOSTAT_CALL_LEVEL,
     STATUS_DISABLED,
     STATUS_HOLDING,
     STATUS_IDLE,
@@ -247,6 +264,88 @@ class Co2VentilationController:
     @property
     def speed_supported(self) -> bool:
         return self._fan_speed_count() > 1
+
+    def _fan_level(self) -> int | None:
+        """Which speed (1..N) the fan is running at, from its percentage."""
+        if not self._fan_is_on():
+            return None
+        count = self._fan_speed_count()
+        if count <= 1:
+            return None
+        state = self.hass.states.get(self.fan_entity)
+        try:
+            pct = float(state.attributes.get("percentage"))
+        except (TypeError, ValueError):
+            return None
+        if pct <= 0:
+            return None
+        return max(1, min(count, round(pct * count / 100)))
+
+    def _call_on(self, key: str) -> bool:
+        entity_id = self.thermostat.get(key)
+        if not entity_id:
+            return False
+        state = self.hass.states.get(entity_id)
+        return state is not None and state.state == STATE_ON
+
+    def hvac_activity(self) -> dict[str, Any]:
+        """What the HVAC is doing, who asked for it, and the blower speed.
+
+        Thermostat calls come from the 24 V inputs; the ventilation fan was
+        turned on either by this integration (CO2) or by hand (manual).
+        """
+        g, y = self._call_on(CONF_CALL_G), self._call_on(CONF_CALL_Y)
+        o, w2 = self._call_on(CONF_CALL_OB), self._call_on(CONF_CALL_W2)
+        fan_on = self._fan_is_on()
+        we_did = fan_on and self._we_turned_on
+
+        if y and w2:
+            activity = ACTIVITY_HEAT_PUMP_AUX
+        elif w2:
+            activity = ACTIVITY_AUX_HEAT
+        elif y and o:
+            activity = ACTIVITY_COOLING
+        elif y:
+            activity = ACTIVITY_HEAT_PUMP
+        elif g:
+            activity = ACTIVITY_FAN_ONLY
+        elif fan_on:
+            activity = ACTIVITY_VENTILATING if we_did else ACTIVITY_FAN_MANUAL
+        else:
+            activity = ACTIVITY_IDLE
+
+        called_by: list[str] = []
+        if g or y or w2:
+            called_by.append(CALLER_THERMOSTAT)
+        if fan_on:
+            called_by.append(CALLER_CO2 if we_did else CALLER_MANUAL)
+
+        # The motor runs the highest tap that's energized.
+        levels = []
+        if g or y:
+            levels.append(THERMOSTAT_CALL_LEVEL)
+        if w2:
+            levels.append(AUX_HEAT_LEVEL)
+        fan_level = self._fan_level()
+        if fan_level:
+            levels.append(fan_level)
+        elif fan_on:
+            levels.append(1)
+        level = max(levels) if levels else None
+
+        climate = self.thermostat.get(CONF_CLIMATE)
+        climate_state = self.hass.states.get(climate) if climate else None
+        return {
+            "activity": activity,
+            "called_by": called_by,
+            "thermostat_name": climate_state.name if climate_state else None,
+            "ventilating": we_did,
+            "fan_speed": SPEED_BY_LEVEL.get(level) if level else None,
+            "fan_level": level,
+            "calls": {"g": g, "y": y, "o": o, "w2": w2},
+            "co2_source": self.max_source if we_did else None,
+            "co2_ppm": self.max_co2 if we_did else None,
+        }
 
     def speed_percentage(self) -> int | None:
         """Fan percentage for the selected speed, or None if not a speed fan."""

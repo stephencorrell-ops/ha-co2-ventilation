@@ -52,6 +52,7 @@ class VentilationSpeedSelect(Co2VentilationEntity, SelectEntity, RestoreEntity):
             "low": "mdi:fan-speed-1",
             "medium_low": "mdi:fan-speed-2",
             "medium": "mdi:fan-speed-3",
+            "medium_high": "mdi:fan-plus",
         }.get(self.controller.speed, "mdi:fan")
 
     @property

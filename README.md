@@ -5,7 +5,7 @@ Runs your HVAC fan (or any switch, fan, or input boolean) when indoor CO2 gets h
 - **Fan on at / Fan off at** setpoints with hysteresis (defaults 900 / 700 ppm)
 - **Minimum run time**, so the fan doesn't short-cycle (default 20 min)
 - **Auto ventilation** switch to turn the routine on or off without touching the fan
-- **Ventilation speed** (Low, Medium-low, Medium; default Low) for multi-speed fans, so CO2 ventilation can run quietly instead of at full speed
+- **Ventilation speed** (Low, Medium-low, Medium, Medium-high; default Low) for multi-speed fans, so CO2 ventilation can run quietly instead of at full speed
 - **Safe restarts**: after Home Assistant starts, it waits for your sensors to report (default 2 min), then turns the fan off unless CO2 is already above the on setpoint
 - **Highest CO2** and **Status** sensors for your dashboard
 - **Fan runtime**: hours since the last filter change (with a reset button) and a lifetime total
@@ -37,7 +37,7 @@ To change sensors, the fan, or the startup delay later, use **Configure** on the
 
 ## Ventilation speed
 
-If the fan you pick is a multi-speed `fan` entity (for example an ESPHome fan with `speed_count: 3`), auto ventilation turns it on at the **Ventilation speed**: Low (speed 1) by default, or Medium-low (2) or Medium (3). Changing the speed while auto ventilation is running the fan applies right away. A fan you turned on by hand keeps the speed you gave it. With a switch or input boolean, the speed setting has no effect and the fan simply turns on.
+If the fan you pick is a multi-speed `fan` entity (for example an ESPHome fan with `speed_count: 4`), auto ventilation turns it on at the **Ventilation speed**: Low (speed 1) by default, or Medium-low (2), Medium (3) or Medium-high (4). On a fan with fewer speeds, a higher choice runs at its top speed. Changing the speed while auto ventilation is running the fan applies right away. A fan you turned on by hand keeps the speed you gave it. With a switch or input boolean, the speed setting has no effect and the fan simply turns on.
 
 ## Entities
 
@@ -49,12 +49,13 @@ With the default name, the entity IDs are:
 | `number.co2_ventilation_fan_on_at` | On setpoint (ppm) |
 | `number.co2_ventilation_fan_off_at` | Off setpoint (ppm) |
 | `number.co2_ventilation_minimum_run_time` | Minimum run (minutes) |
-| `select.co2_ventilation_ventilation_speed` | Low, Medium-low, or Medium; the speed auto ventilation uses |
+| `select.co2_ventilation_ventilation_speed` | Low, Medium-low, Medium, or Medium-high; the speed auto ventilation uses |
 | `sensor.co2_ventilation_highest_co2` | Reading being acted on; `source` attribute names the room |
 | `sensor.co2_ventilation_fan_runtime_since_filter_change` | Blower hours since the filter was last reset |
 | `sensor.co2_ventilation_fan_runtime_total` | Lifetime blower hours (never resets) |
 | `button.co2_ventilation_reset_filter_runtime` | Press after changing the filter; also sets the date below to today |
 | `date.co2_ventilation_last_filter_change` | When the filter was last changed; set it by hand for an earlier change |
+| `sensor.co2_ventilation_hvac_activity` | What the HVAC is doing: Idle, Heat pump heating, Heat pump + heat strips, Heat strips, Cooling, Fan only, CO2 ventilating, Fan on by hand. Attributes say who called for it (`called_by`: thermostat, co2, manual), the thermostat's name, and the speed the blower is actually running (`fan_speed`) |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
 
 ## Thermostat and fan runtime

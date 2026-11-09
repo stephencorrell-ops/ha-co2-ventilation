@@ -1,13 +1,13 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.10.0";
+const CARD_VERSION = "0.11.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
   starting: "Starting up",
   disabled: "Auto off",
-  idle: "Idle",
+  idle: "CO\u2082 OK",
   ventilating: "Ventilating",
   min_run_hold: "Finishing minimum run",
   manual: "Fan on manually",
@@ -15,10 +15,21 @@ const STATUS_TEXT = {
 };
 const RANGES = [[6, "6 h"], [24, "24 h"], [168, "7 d"]];
 const rangeText = (h) => `Last ${RANGES.find(([x]) => x === h)?.[1].replace("7 d", "7 days").replace(" h", " hours") || h + " hours"}`;
-const SPEED_LABELS = { low: "Low", medium_low: "Med-low", medium: "Medium" };
-const SPEED_LEVEL = { low: 1, medium_low: 2, medium: 3 };
+const SPEED_LABELS = { low: "Low", medium_low: "Med-low", medium: "Medium", medium_high: "Med-high", high: "High" };
+const SPEED_LEVEL = { low: 1, medium_low: 2, medium: 3, medium_high: 4 };
 // Seconds per turn for the spinning fan icon: faster at higher speeds.
-const SPIN_SECONDS = { low: 1.6, medium_low: 1.1, medium: 0.75, high: 0.55 };
+const SPIN_SECONDS = { low: 1.6, medium_low: 1.1, medium: 0.75, medium_high: 0.6, high: 0.45 };
+// System status row: what's running (from the HVAC activity sensor).
+const ACTIVITY = {
+  idle: { text: "Idle", color: null },
+  heat_pump: { text: "Heat pump heating", color: "#eb6834" },
+  heat_pump_aux: { text: "Heat pump + heat strips", color: "#e34948" },
+  aux_heat: { text: "Heat strips", color: "#e34948" },
+  cooling: { text: "Cooling", color: "#2a78d6" },
+  fan_only: { text: "Fan only", color: "#888780" },
+  ventilating: { text: "Ventilating", color: "#1baf7a" },
+  fan_manual: { text: "Fan on", color: "#6250d6" },
+};
 const SPIN_CSS = `
   @keyframes co2spin { to { transform: rotate(360deg); } }
   ha-icon.fan { transform-origin: 50% 50%; transition: color .3s; }
@@ -112,6 +123,7 @@ class Co2VentilationCard extends HTMLElement {
       min: byKey("min_run", "_minimum_run_time"),
       highest: byKey("highest_co2", "_highest_co2"),
       speed: byKey("speed", "_ventilation_speed"),
+      activity: byKey("hvac_activity", "_hvac_activity"),
     };
   }
 
@@ -203,8 +215,15 @@ class Co2VentilationCard extends HTMLElement {
   ha-card { padding: 16px; }
   .head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
   .head ha-icon { color:var(--secondary-text-color); }
-  .pill.speed { background:var(--secondary-background-color); color:var(--primary-text-color); }
-  .pill.speed[hidden] { display:none; }
+  .sys { display:flex; align-items:center; gap:14px; border:1px solid var(--divider-color); border-radius:12px; padding:10px 14px; margin-bottom:14px; transition:background .3s, border-color .3s; }
+  .sys ha-icon.fan { --mdc-icon-size:30px; color:var(--disabled-text-color, var(--secondary-text-color)); flex-shrink:0; }
+  .sys ha-icon.fan.spin { color:var(--sys-color, var(--primary-color)); }
+  .sys-t { flex:1; min-width:0; }
+  .sys-what { font-size:16px; font-weight:500; color:var(--primary-text-color); }
+  .sys-who { font-size:13px; color:var(--secondary-text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sys-spd { text-align:right; flex-shrink:0; }
+  .sys-spd .k { font-size:12px; color:var(--secondary-text-color); }
+  .sys-spd .v { font-size:14px; font-weight:500; color:var(--primary-text-color); }
   .title { font-size:18px; font-weight:500; flex:1; color:var(--primary-text-color); }
   .pill { font-size:12px; padding:4px 10px; border-radius:999px; white-space:nowrap; }
   .pill.on { background:rgba(237,161,0,.18); color:var(--warning-color,#b37500); }
@@ -254,9 +273,12 @@ class Co2VentilationCard extends HTMLElement {
 <ha-card>
   <div class="head">
     <div class="title">${esc(this._config.title || "CO\u2082 ventilation")}</div>
-    <ha-icon icon="mdi:fan" class="fan" id="fanicon"></ha-icon>
-    <span class="pill speed" id="speedpill" hidden></span>
     <span class="pill" id="status"></span>
+  </div>
+  <div class="sys" id="sys" role="status">
+    <ha-icon icon="mdi:fan" class="fan" id="fanicon"></ha-icon>
+    <div class="sys-t"><div class="sys-what" id="syswhat"></div><div class="sys-who" id="syswho"></div></div>
+    <div class="sys-spd"><div class="k">Fan speed</div><div class="v" id="sysspd"></div></div>
   </div>
   <div class="rooms" id="rooms"></div>
   <div class="ctl">
@@ -353,6 +375,58 @@ class Co2VentilationCard extends HTMLElement {
     }
     this._built = true;
     this._renderChart();
+  }
+
+  // System status row: what the HVAC is running, who asked for it, and the
+  // speed the blower is actually at (the highest energized tap wins).
+  _updateSystem(fanOn, onSetpoint) {
+    const e = this._e, hass = this._hass;
+    const $ = (id) => this.shadowRoot.getElementById(id);
+    const act = hass.states[e.activity];
+    let key, who = [], speed, a = {};
+    if (act) {
+      a = act.attributes || {};
+      key = act.state in ACTIVITY ? act.state : "idle";
+      speed = a.fan_speed || null;
+    } else {
+      // Older integration without the activity sensor: fall back to the fan.
+      key = fanOn ? (hass.states[e.status]?.state === "manual" ? "fan_manual" : "ventilating") : "idle";
+      speed = fanOn ? this._runningSpeed() : null;
+      a = { called_by: fanOn ? [key === "fan_manual" ? "manual" : "co2"] : [] };
+    }
+    const callers = a.called_by || [];
+    const nest = a.thermostat_name || "thermostat";
+    const thermo = callers.includes("thermostat");
+    const co2 = callers.includes("co2");
+    const manual = callers.includes("manual");
+
+    let what = ACTIVITY[key].text;
+    if (thermo && co2) what += " + ventilating";
+    else if (thermo && manual) what += " + fan on";
+
+    const room = a.co2_source ? (hass.states[a.co2_source]?.attributes?.friendly_name || a.co2_source).replace(/\s*(carbon dioxide|co2)\s*$/i, "") : "";
+    const co2Txt = `CO\u2082${room ? ` \u00b7 ${room}` : ""}${Number.isFinite(a.co2_ppm) ? ` ${Math.round(a.co2_ppm)} ppm` : ""}`;
+    const spLabel = speed ? SPEED_LABELS[speed] || speed : "";
+    if (thermo && co2) who = [`Called by ${nest} and CO\u2082`, spLabel && `${spLabel} wins`];
+    else if (thermo && manual) who = [`Called by ${nest}`, "fan also on by hand"];
+    else if (thermo) who = [key === "fan_only" ? `Called by ${nest} fan` : `Called by ${nest}`, key.includes("aux") ? "aux heat" : ""];
+    else if (co2) who = [`Called by ${co2Txt}`];
+    else if (manual) who = ["Turned on by hand", "CO\u2082 won't turn it off"];
+    else who = ["Nothing calling", `CO\u2082 under ${Math.round(onSetpoint)} ppm`];
+    const whoTxt = who.filter(Boolean).join(" \u00b7 ");
+
+    const color = ACTIVITY[key].color;
+    const box = $("sys");
+    box.style.background = color ? `${color}1f` : "";
+    box.style.borderColor = color ? `${color}66` : "";
+    box.style.setProperty("--sys-color", color || "var(--primary-color)");
+    if ($("syswhat").textContent !== what) $("syswhat").textContent = what;
+    if ($("syswho").textContent !== whoTxt) $("syswho").textContent = whoTxt;
+    $("syswho").title = whoTxt;
+    $("sysspd").textContent = spLabel || "Off";
+    const running = key !== "idle";
+    setSpin($("fanicon"), running, SPIN_SECONDS[speed] || 1.1);
+    $("fanicon").setAttribute("aria-label", running ? `Fan running${spLabel ? ` at ${spLabel}` : ""}` : "Fan off");
   }
 
   _updateRange() {
@@ -459,14 +533,7 @@ class Co2VentilationCard extends HTMLElement {
     $("autosub").textContent = autoOn ? "" : "Fan won't change on its own";
     const fanOn = hass.states[e.fan]?.state === "on";
     $("fan").classList.toggle("on", fanOn);
-    const running = fanOn ? this._runningSpeed() : null;
-    setSpin($("fanicon"), fanOn, SPIN_SECONDS[running] || 1.1);
-    $("fanicon").setAttribute("aria-label", fanOn ? "Fan running" : "Fan off");
-    $("fanicon").title = fanOn ? "Fan running" : "Fan off";
-    const sp = $("speedpill");
-    const spTxt = running ? SPEED_LABELS[running] || (running === "high" ? "High" : running) : "";
-    sp.hidden = !spTxt;
-    if (sp.textContent !== spTxt) sp.textContent = spTxt;
+    this._updateSystem(fanOn, on);
     const remaining = hass.states[e.status]?.attributes?.min_run_remaining_s || 0;
     $("fansub").textContent = st === "min_run_hold" && remaining ? `${Math.ceil(remaining / 60)} min left` : fanOn ? "Running" : "Off";
     const speedEl = $("speed");
@@ -712,6 +779,7 @@ class Co2ThermostatCard extends HTMLElement {
       vent: a.fan_entity,
       highest: byKey("highest_co2"),
       speed: byKey("speed"),
+      activity: byKey("hvac_activity"),
       on: byKey("on_setpoint"),
       off: byKey("off_setpoint"),
       filter: byKey("filter_runtime"),
@@ -1036,10 +1104,11 @@ class Co2ThermostatCard extends HTMLElement {
     // cooling run it at full speed; ventilation alone at the chosen speed.
     const blower = this._on(e.g) || this._on(e.y) || this._on(e.w2) || vent;
     const fullSpeed = this._on(e.y) || this._on(e.w2);
-    setSpin($("fanicon"), blower, fullSpeed ? 0.6 : vent && !this._on(e.g) ? SPIN_SECONDS[speed] || 1.1 : 0.9);
+    const actual = hass.states[e.activity]?.attributes?.fan_speed;
+    setSpin($("fanicon"), blower, actual ? SPIN_SECONDS[actual] || 0.9 : fullSpeed ? 0.6 : vent && !this._on(e.g) ? SPIN_SECONDS[speed] || 1.1 : 0.9);
     $("fanicon").setAttribute("aria-label", blower ? "Blower running" : "Blower off");
     $("fanicon").title = blower ? "Blower running" : "Blower off";
-    const speedTxt = { low: "Low", medium_low: "Med-low", medium: "Medium" }[speed] || "";
+    const speedTxt = SPEED_LABELS[speed] || "";
     const chips = [
       [e.g, "G", "Fan"],
       [e.y, "Y", "Compressor"],

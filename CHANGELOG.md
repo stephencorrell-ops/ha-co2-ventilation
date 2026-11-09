@@ -4,6 +4,13 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.11.0
+
+- New **HVAC activity** sensor: what the system is running (heat pump, heat strips, cooling, fan only, CO2 ventilation, fan on by hand, or idle), who called for it (your thermostat, CO2, or by hand), and the speed the blower is actually at. The highest energized speed wins, so a Nest call at Medium and ventilation at Low shows Medium.
+- The **CO2 ventilation card** has a new status row under the title, for example "Heat pump heating, called by Nest" or "Ventilating, called by CO2, Front room 912 ppm". Its fan spins whenever the blower runs, faster at higher speeds, and the row shows the actual fan speed. This replaces the fan and speed pill that were in the header. The header pill still shows the CO2 routine, now reading **CO2 OK** instead of Idle.
+- New **Medium-high** ventilation speed for 4-speed fans.
+- The thermostat card's fan spins at the blower's actual speed.
+
 ## 0.10.0
 
 - On the **CO2 ventilation card**, the spinning fan moved to the top right next to the status, matching the thermostat card. Beside it, a **speed pill** shows the speed the fan is actually running at (Low, Med-low, Medium). It hides when the fan is off or has no speeds.

@@ -78,7 +78,7 @@
     "select": {
       "speed": {
         "name": "Ventilation speed",
-        "state": { "low": "Low", "medium_low": "Medium-low", "medium": "Medium" }
+        "state": { "low": "Low", "medium_low": "Medium-low", "medium": "Medium", "medium_high": "Medium-high" }
       }
     },
     "switch": {
@@ -92,6 +92,19 @@
     },
     "sensor": {
       "highest_co2": { "name": "Highest CO2" },
+      "hvac_activity": {
+        "name": "HVAC activity",
+        "state": {
+          "idle": "Idle",
+          "heat_pump": "Heat pump heating",
+          "heat_pump_aux": "Heat pump + heat strips",
+          "aux_heat": "Heat strips",
+          "cooling": "Cooling",
+          "fan_only": "Fan only",
+          "ventilating": "CO2 ventilating",
+          "fan_manual": "Fan on by hand"
+        }
+      },
       "filter_runtime": { "name": "Fan runtime since filter change" },
       "total_runtime": { "name": "Fan runtime total" },
       "status": {

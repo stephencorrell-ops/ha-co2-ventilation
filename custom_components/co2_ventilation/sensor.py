@@ -1,4 +1,4 @@
-"""Highest CO2 and status sensors."""
+"""Highest CO2, status, HVAC activity and fan runtime sensors."""
 
 from __future__ import annotations
 
@@ -12,7 +12,8 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import CONCENTRATION_PARTS_PER_MILLION, UnitOfTime
 from homeassistant.util import dt as dt_util
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_state_change_event
 try:
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 except ImportError:  # Home Assistant before 2025.2
@@ -21,7 +22,7 @@ except ImportError:  # Home Assistant before 2025.2
     )
 
 from . import Co2VentilationConfigEntry
-from .const import STATUSES
+from .const import ACTIVITIES, CONF_CLIMATE, STATUSES, THERMOSTAT_KEYS
 from .entity import Co2VentilationEntity
 
 
@@ -35,6 +36,7 @@ async def async_setup_entry(
         [
             HighestCo2Sensor(controller, "highest_co2"),
             StatusSensor(controller, "status"),
+            HvacActivitySensor(controller, "hvac_activity"),
             FanRuntimeSensor(controller, "filter_runtime"),
             FanRuntimeSensor(controller, "total_runtime"),
         ]
@@ -131,3 +133,51 @@ class FanRuntimeSensor(Co2VentilationEntity, RestoreSensor):
             changed = runtime.filter_changed
             attrs["filter_changed"] = changed.isoformat() if changed else None
         return attrs
+
+
+class HvacActivitySensor(Co2VentilationEntity, SensorEntity):
+    """What the HVAC is doing right now, who called for it, and the blower speed."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ACTIVITIES
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        t = self.controller.thermostat
+        watched = [t[k] for k in THERMOSTAT_KEYS if k != CONF_CLIMATE and t[k]]
+        if t[CONF_CLIMATE]:
+            watched.append(t[CONF_CLIMATE])
+        if self.controller.fan_entity:
+            watched.append(self.controller.fan_entity)
+        if watched:
+
+            @callback
+            def _changed(_event) -> None:
+                self.async_write_ha_state()
+
+            self.async_on_remove(
+                async_track_state_change_event(self.hass, list(set(watched)), _changed)
+            )
+
+    @property
+    def native_value(self) -> str:
+        return self.controller.hvac_activity()["activity"]
+
+    @property
+    def icon(self) -> str:
+        return {
+            "idle": "mdi:fan-off",
+            "heat_pump": "mdi:heat-pump",
+            "heat_pump_aux": "mdi:fire",
+            "aux_heat": "mdi:fire",
+            "cooling": "mdi:snowflake",
+            "fan_only": "mdi:fan",
+            "ventilating": "mdi:molecule-co2",
+            "fan_manual": "mdi:fan",
+        }.get(self.native_value, "mdi:hvac")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        info = self.controller.hvac_activity()
+        info.pop("activity")
+        return info
