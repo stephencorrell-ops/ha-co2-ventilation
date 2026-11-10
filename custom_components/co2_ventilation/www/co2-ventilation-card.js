@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.11.0";
+const CARD_VERSION = "0.12.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -15,6 +15,8 @@ const STATUS_TEXT = {
 };
 const RANGES = [[6, "6 h"], [24, "24 h"], [168, "7 d"]];
 const rangeText = (h) => `Last ${RANGES.find(([x]) => x === h)?.[1].replace("7 d", "7 days").replace(" h", " hours") || h + " hours"}`;
+const SLIDER_KEYS = ["on", "off", "min", "son", "shigh", "soff", "smax"];
+const SLIDER_UNIT = { on: "ppm", off: "ppm", min: "min", son: "+%", shigh: "+%", soff: "+%", smax: "min" };
 const SPEED_LABELS = { low: "Low", medium_low: "Med-low", medium: "Medium", medium_high: "Med-high", high: "High" };
 const SPEED_LEVEL = { low: 1, medium_low: 2, medium: 3, medium_high: 4 };
 // Seconds per turn for the spinning fan icon: faster at higher speeds.
@@ -124,6 +126,12 @@ class Co2VentilationCard extends HTMLElement {
       highest: byKey("highest_co2", "_highest_co2"),
       speed: byKey("speed", "_ventilation_speed"),
       activity: byKey("hvac_activity", "_hvac_activity"),
+      shower: byKey("shower", "_shower_ventilation"),
+      showerDiff: byKey("shower_humidity_diff", "_bathroom_humidity_above_house"),
+      son: byKey("shower_on_delta", "_shower_on_above_house"),
+      shigh: byKey("shower_high_until", "_shower_high_until"),
+      soff: byKey("shower_off_delta", "_shower_off_below"),
+      smax: byKey("shower_max_run_minutes", "_shower_maximum_run"),
     };
   }
 
@@ -215,6 +223,7 @@ class Co2VentilationCard extends HTMLElement {
   ha-card { padding: 16px; }
   .head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
   .head ha-icon { color:var(--secondary-text-color); }
+  .row.sec { border-top:1px solid var(--divider-color); margin-top:4px; padding-top:10px; }
   .sys { display:flex; align-items:center; gap:14px; border:1px solid var(--divider-color); border-radius:12px; padding:10px 14px; margin-bottom:14px; transition:background .3s, border-color .3s; }
   .sys ha-icon.fan { --mdc-icon-size:30px; color:var(--disabled-text-color, var(--secondary-text-color)); flex-shrink:0; }
   .sys ha-icon.fan.spin { color:var(--sys-color, var(--primary-color)); }
@@ -284,19 +293,26 @@ class Co2VentilationCard extends HTMLElement {
   <div class="ctl">
     <div class="row"><ha-icon icon="mdi:robot"></ha-icon><span class="l">Auto</span><span class="grow sub" id="autosub"></span><button class="tg" id="auto" aria-label="Auto ventilation"></button></div>
     <div class="row"><ha-icon icon="mdi:fan"></ha-icon><span class="l">HVAC fan</span><span class="grow sub" id="fansub"></span><button class="tg" id="fan" aria-label="HVAC fan"></button></div>
-    ${e.speed ? `<div class="row"><ha-icon icon="mdi:fan-speed-1" id="speedicon"></ha-icon><span class="l">Speed</span><div class="seg" id="speed" role="group" aria-label="Ventilation speed">${(this._hass.states[e.speed]?.attributes?.options || Object.keys(SPEED_LABELS)).map((o) => `<button data-o="${esc(o)}">${esc(SPEED_LABELS[o] || o)}</button>`).join("")}</div></div>` : ""}
+    ${e.speed ? `<div class="row"><ha-icon icon="mdi:fan-speed-1" id="speedicon"></ha-icon><span class="l">CO\u2082 speed</span><div class="seg" id="speed" role="group" aria-label="Ventilation speed">${(this._hass.states[e.speed]?.attributes?.options || Object.keys(SPEED_LABELS)).map((o) => `<button data-o="${esc(o)}">${esc(SPEED_LABELS[o] || o)}</button>`).join("")}</div></div>` : ""}
+    ${e.shower ? `<div class="row"><ha-icon icon="mdi:shower-head"></ha-icon><span class="l">Shower</span><span class="grow sub" id="showersub"></span><button class="tg" id="shower" aria-label="Shower ventilation"></button></div>` : ""}
     <div class="setpts locked" id="setpts">
       <div class="row"><ha-icon icon="mdi:tune-variant"></ha-icon><span class="l">Setpoints</span><span class="grow sub" id="locksub">Locked</span>
         <button class="lock" id="lock" aria-label="Unlock setpoints"><ha-icon icon="mdi:lock"></ha-icon><span id="locktxt">Unlock</span></button></div>
       ${this._sliderRow("on", "mdi:arrow-collapse-up", "Fan on at", e.on)}
       ${this._sliderRow("off", "mdi:arrow-collapse-down", "Fan off at", e.off)}
       ${this._sliderRow("min", "mdi:timer-outline", "Minimum run", e.min)}
+      ${e.son ? `<div class="row sec"><ha-icon icon="mdi:shower-head"></ha-icon><span class="l">Shower</span><span class="grow sub">Bathroom vs. house humidity</span></div>` : ""}
+      ${this._sliderRow("son", "mdi:water-plus", "On above", e.son)}
+      ${this._sliderRow("shigh", "mdi:fan-chevron-down", "High until", e.shigh)}
+      ${this._sliderRow("soff", "mdi:water-minus", "Off below", e.soff)}
+      ${this._sliderRow("smax", "mdi:timer-stop-outline", "Max run", e.smax)}
     </div>
   </div>
   ${this._config.show_chart ? `<div class="chart"><div class="rbar"><span class="sub" id="rangetxt"></span><span class="seg" id="range" role="group" aria-label="Chart range">${RANGES.map(([h, l]) => `<button data-h="${h}">${l}</button>`).join("")}</span></div><div class="legend" id="legend"></div><div id="svg"></div></div>` : ""}
 </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
     $("auto").addEventListener("click", () => e.auto && this._call("switch", "toggle", { entity_id: e.auto }));
+    $("shower")?.addEventListener("click", () => this._call("switch", "toggle", { entity_id: e.shower }));
     $("fan").addEventListener("click", () => {
       if (!e.fan) return;
       const pct = this._speedPercentage();
@@ -324,10 +340,10 @@ class Co2VentilationCard extends HTMLElement {
     this._updateRange();
     $("lock").addEventListener("click", () => this._setLocked(!this._locked));
     this._setLocked(true);
-    for (const key of ["on", "off", "min"]) {
+    for (const key of SLIDER_KEYS) {
       const input = $(`s_${key}`);
       if (!input) continue;
-      const unit = key === "min" ? " min" : " ppm";
+      const unit = ` ${SLIDER_UNIT[key]}`;
       input.addEventListener("pointerdown", () => {
         this._dragging = true;
         this._armRelock();
@@ -398,16 +414,21 @@ class Co2VentilationCard extends HTMLElement {
     const nest = a.thermostat_name || "thermostat";
     const thermo = callers.includes("thermostat");
     const co2 = callers.includes("co2");
+    const hum = callers.includes("humidity");
     const manual = callers.includes("manual");
 
     let what = ACTIVITY[key].text;
-    if (thermo && co2) what += " + ventilating";
+    if (thermo && (co2 || hum)) what += " + ventilating";
     else if (thermo && manual) what += " + fan on";
+    else if (key === "ventilating" && hum && !co2) what = "Clearing shower humidity";
 
     const room = a.co2_source ? (hass.states[a.co2_source]?.attributes?.friendly_name || a.co2_source).replace(/\s*(carbon dioxide|co2)\s*$/i, "") : "";
     const co2Txt = `CO\u2082${room ? ` \u00b7 ${room}` : ""}${Number.isFinite(a.co2_ppm) ? ` ${Math.round(a.co2_ppm)} ppm` : ""}`;
     const spLabel = speed ? SPEED_LABELS[speed] || speed : "";
-    if (thermo && co2) who = [`Called by ${nest} and CO\u2082`, spLabel && `${spLabel} wins`];
+    const humTxt = Number.isFinite(a.humidity_diff) ? `bathroom +${Math.round(a.humidity_diff)}%` : "";
+    const names = [thermo && nest, co2 && "CO\u2082", hum && "shower humidity"].filter(Boolean);
+    if (names.length > 1) who = [`Called by ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`, spLabel && `${spLabel} wins`];
+    else if (hum) who = ["Called by shower humidity", humTxt, a.shower_mode === "low" ? "drying out" : ""];
     else if (thermo && manual) who = [`Called by ${nest}`, "fan also on by hand"];
     else if (thermo) who = [key === "fan_only" ? `Called by ${nest} fan` : `Called by ${nest}`, key.includes("aux") ? "aux heat" : ""];
     else if (co2) who = [`Called by ${co2Txt}`];
@@ -497,7 +518,7 @@ class Co2VentilationCard extends HTMLElement {
     const a = this._hass.states[entityId]?.attributes || {};
     return `<div class="row"><ha-icon icon="${icon}"></ha-icon><span class="l">${label}</span>
       <input type="range" id="s_${key}" min="${a.min ?? 0}" max="${a.max ?? 100}" step="${a.step ?? 1}">
-      <span class="val"><input type="number" id="v_${key}" inputmode="numeric" min="${a.min ?? 0}" max="${a.max ?? 100}" step="${a.step ?? 1}" aria-label="${label}"><span>${key === "min" ? "min" : "ppm"}</span></span></div>`;
+      <span class="val"><input type="number" id="v_${key}" inputmode="numeric" min="${a.min ?? 0}" max="${a.max ?? 100}" step="${a.step ?? 1}" aria-label="${label}"><span>${SLIDER_UNIT[key] || "ppm"}</span></span></div>`;
   }
 
   _update() {
@@ -534,6 +555,16 @@ class Co2VentilationCard extends HTMLElement {
     const fanOn = hass.states[e.fan]?.state === "on";
     $("fan").classList.toggle("on", fanOn);
     this._updateSystem(fanOn, on);
+    if ($("shower")) {
+      const showerOn = hass.states[e.shower]?.state === "on";
+      $("shower").classList.toggle("on", showerOn);
+      const d = hass.states[e.showerDiff];
+      const diff = parseFloat(d?.state);
+      const mode = d?.attributes?.mode;
+      const modeTxt = { high: "running high", low: "running low", lockout: "hit max run, waiting to dry" }[mode] || "";
+      const parts = [Number.isFinite(diff) ? `Bathroom ${diff >= 0 ? "+" : ""}${Math.round(diff)}% vs. house` : "No reading", showerOn ? modeTxt : "Off"];
+      $("showersub").textContent = parts.filter(Boolean).join(" \u00b7 ");
+    }
     const remaining = hass.states[e.status]?.attributes?.min_run_remaining_s || 0;
     $("fansub").textContent = st === "min_run_hold" && remaining ? `${Math.ceil(remaining / 60)} min left` : fanOn ? "Running" : "Off";
     const speedEl = $("speed");
@@ -546,7 +577,7 @@ class Co2VentilationCard extends HTMLElement {
       $("speedicon")?.setAttribute("icon", `mdi:fan-speed-${SPEED_LEVEL[cur] || 1}`);
     }
 
-    for (const key of ["on", "off", "min"]) {
+    for (const key of SLIDER_KEYS) {
       const input = $(`s_${key}`);
       if (!input || !e[key]) continue;
       const v = this._num(e[key]);

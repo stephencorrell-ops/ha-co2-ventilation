@@ -4,6 +4,14 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.12.0
+
+- New **shower humidity ventilation**. Pick a bathroom humidity sensor under Configure → Shower humidity. When the bathroom gets well above the house's humidity, the fan runs at its top speed; once it falls back it drops to low; when it's close to the house again it turns off. Defaults: on at +10, high until +20, off below +5 (humidity points), with high held at least 5 minutes and a 90 minute maximum run. A dead sensor stops it, and a fan switched off by hand mid-shower stays off for that shower.
+- The house reference is the thermostat's humidity sensor unless you pick another one.
+- Shower and CO2 share the fan: it runs at whichever speed is higher and only turns off when neither needs it.
+- Optional bathroom exhaust fan, turned on for the whole shower.
+- The CO2 card shows a Shower row with the bathroom's humidity over the house, and the shower thresholds next to the CO2 setpoints. The status row shows shower humidity as a caller. The speed buttons are now labelled CO2 speed.
+
 ## 0.11.0
 
 - New **HVAC activity** sensor: what the system is running (heat pump, heat strips, cooling, fan only, CO2 ventilation, fan on by hand, or idle), who called for it (your thermostat, CO2, or by hand), and the speed the blower is actually at. The highest energized speed wins, so a Nest call at Medium and ventilation at Low shows Medium.

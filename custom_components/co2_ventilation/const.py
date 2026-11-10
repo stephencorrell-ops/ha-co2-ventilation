@@ -17,6 +17,14 @@ CONF_CALL_G = "call_g"
 CONF_CALL_Y = "call_y"
 CONF_CALL_OB = "call_ob"
 CONF_CALL_W2 = "call_w2"
+# Optional shower humidity section.
+CONF_SHOWER = "shower"
+CONF_BATH_HUMIDITY = "bathroom_humidity"
+CONF_HOUSE_HUMIDITY = "house_humidity"
+CONF_EXHAUST_FAN = "exhaust_fan"
+SHOWER_KEYS = (CONF_BATH_HUMIDITY, CONF_HOUSE_HUMIDITY, CONF_EXHAUST_FAN)
+CALLER_HUMIDITY = "humidity"
+
 THERMOSTAT_KEYS = (
     CONF_CLIMATE,
     CONF_TEMPERATURE,

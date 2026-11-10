@@ -58,6 +58,33 @@ With the default name, the entity IDs are:
 | `sensor.co2_ventilation_hvac_activity` | What the HVAC is doing: Idle, Heat pump heating, Heat pump + heat strips, Heat strips, Cooling, Fan only, CO2 ventilating, Fan on by hand. Attributes say who called for it (`called_by`: thermostat, co2, manual), the thermostat's name, and the speed the blower is actually running (`fan_speed`) |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
 
+## Shower humidity
+
+Under **Configure → Shower humidity (optional)**, pick:
+
+- **Bathroom humidity sensor**
+- **House humidity sensor**: leave empty to use the thermostat's humidity sensor
+- **Bathroom exhaust fan** (optional): a switch, fan, light or input boolean, turned on for the whole shower
+
+How it runs, in humidity points of the bathroom above the house (52 % against 40 % is +12):
+
+1. Above **On above** (+10): the fan runs at its top speed.
+2. Below **High until** (+20), after at least 5 minutes on high: it drops to low.
+3. Below **Off below** (+5): off.
+
+**Shower maximum run** (90 minutes) stops it if the bathroom never dries out, and it then waits for the bathroom to come back near the house before it can start again. If the bathroom sensor goes unavailable it stops. Turning the fan off by hand during a shower keeps it off until that shower is over. **Shower ventilation** turns the whole feature on or off.
+
+The shower and CO2 share the fan: it runs at the higher of the two speeds and only turns off when neither needs it.
+
+| Entity | What it is |
+|---|---|
+| `switch.co2_ventilation_shower_ventilation` | Turns shower ventilation on or off |
+| `sensor.co2_ventilation_bathroom_humidity_above_house` | Bathroom minus house, with the current mode (off, high, low, lockout) |
+| `number.co2_ventilation_shower_on_above_house` | On above (default +10) |
+| `number.co2_ventilation_shower_high_until` | High until (default +20) |
+| `number.co2_ventilation_shower_off_below` | Off below (default +5) |
+| `number.co2_ventilation_shower_maximum_run` | Maximum run (default 90 minutes) |
+
 ## Thermostat and fan runtime
 
 Under **Configure**, the optional **Thermostat** section takes:

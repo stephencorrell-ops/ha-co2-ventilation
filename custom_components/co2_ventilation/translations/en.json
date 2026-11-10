@@ -28,6 +28,19 @@
               "call_ob": "Reversing valve (O, on in cooling)",
               "call_w2": "Heat strips (W2/AUX)"
             }
+          },
+          "shower": {
+            "name": "Shower humidity (optional)",
+            "description": "Runs the fan when the bathroom is well above the house's humidity: high when it rises, low as it dries out, off when it's back near the house. The thresholds are adjustable on the device page and the card.",
+            "data": {
+              "bathroom_humidity": "Bathroom humidity sensor",
+              "house_humidity": "House humidity sensor",
+              "exhaust_fan": "Bathroom exhaust fan"
+            },
+            "data_description": {
+              "house_humidity": "Leave empty to use the thermostat's humidity sensor.",
+              "exhaust_fan": "Optional. Turned on for the whole shower and off afterwards."
+            }
           }
         }
       }
@@ -61,6 +74,19 @@
               "call_ob": "Reversing valve (O, on in cooling)",
               "call_w2": "Heat strips (W2/AUX)"
             }
+          },
+          "shower": {
+            "name": "Shower humidity (optional)",
+            "description": "Runs the fan when the bathroom is well above the house's humidity: high when it rises, low as it dries out, off when it's back near the house. The thresholds are adjustable on the device page and the card.",
+            "data": {
+              "bathroom_humidity": "Bathroom humidity sensor",
+              "house_humidity": "House humidity sensor",
+              "exhaust_fan": "Bathroom exhaust fan"
+            },
+            "data_description": {
+              "house_humidity": "Leave empty to use the thermostat's humidity sensor.",
+              "exhaust_fan": "Optional. Turned on for the whole shower and off afterwards."
+            }
           }
         }
       }
@@ -73,7 +99,11 @@
     "number": {
       "on_setpoint": { "name": "Fan on at" },
       "off_setpoint": { "name": "Fan off at" },
-      "min_run": { "name": "Minimum run time" }
+      "min_run": { "name": "Minimum run time" },
+      "shower_on_delta": { "name": "Shower on above house" },
+      "shower_high_until": { "name": "Shower high until" },
+      "shower_off_delta": { "name": "Shower off below" },
+      "shower_max_run_minutes": { "name": "Shower maximum run" }
     },
     "select": {
       "speed": {
@@ -82,7 +112,8 @@
       }
     },
     "switch": {
-      "auto": { "name": "Auto ventilation" }
+      "auto": { "name": "Auto ventilation" },
+      "shower": { "name": "Shower ventilation" }
     },
     "button": {
       "reset_filter": { "name": "Reset filter runtime" }
@@ -105,6 +136,7 @@
           "fan_manual": "Fan on by hand"
         }
       },
+      "shower_humidity_diff": { "name": "Bathroom humidity above house" },
       "filter_runtime": { "name": "Fan runtime since filter change" },
       "total_runtime": { "name": "Fan runtime total" },
       "status": {
@@ -123,6 +155,7 @@
   },
   "exceptions": {
     "on_below_off": { "message": "The on setpoint must be above the off setpoint ({off} ppm)." },
+    "shower_off_too_high": { "message": "The shower off point has to be below both the on point and the high-until point." },
     "filter_date_future": { "message": "The filter change date can't be in the future." },
     "off_above_on": { "message": "The off setpoint must be below the on setpoint ({on} ppm)." }
   }

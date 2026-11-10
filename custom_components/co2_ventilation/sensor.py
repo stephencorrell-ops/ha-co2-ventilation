@@ -37,6 +37,11 @@ async def async_setup_entry(
             HighestCo2Sensor(controller, "highest_co2"),
             StatusSensor(controller, "status"),
             HvacActivitySensor(controller, "hvac_activity"),
+            *(
+                [ShowerHumiditySensor(controller, "shower_humidity_diff")]
+                if controller.shower_configured
+                else []
+            ),
             FanRuntimeSensor(controller, "filter_runtime"),
             FanRuntimeSensor(controller, "total_runtime"),
         ]
@@ -81,6 +86,7 @@ class StatusSensor(Co2VentilationEntity, SensorEntity):
             "fan_entity": self.controller.fan_entity,
             "speed": self.controller.speed,
             "thermostat": self.controller.thermostat,
+            "shower": self.controller.shower_config,
         }
 
 
@@ -181,3 +187,28 @@ class HvacActivitySensor(Co2VentilationEntity, SensorEntity):
         info = self.controller.hvac_activity()
         info.pop("activity")
         return info
+
+
+class ShowerHumiditySensor(Co2VentilationEntity, SensorEntity):
+    """How far the bathroom's humidity is above the house, in points."""
+
+    _attr_icon = "mdi:shower"
+    _attr_native_unit_of_measurement = "%"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
+
+    @property
+    def native_value(self) -> float | None:
+        return self.controller.shower.diff
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        shower = self.controller.shower
+        remaining = shower.run_remaining(dt_util.utcnow())
+        return {
+            "mode": shower.mode,
+            "enabled": shower.enabled,
+            "run_remaining_min": round(remaining) if remaining is not None else None,
+            "bathroom_sensor": self.controller.shower_config.get("bathroom_humidity"),
+            "house_sensor": self.controller._house_humidity_source(),
+        }

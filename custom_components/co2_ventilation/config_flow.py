@@ -26,7 +26,11 @@ from .const import (
     CONF_CLIMATE,
     CONF_CO2_SENSORS,
     CONF_FAN_ENTITY,
+    CONF_BATH_HUMIDITY,
+    CONF_EXHAUST_FAN,
+    CONF_HOUSE_HUMIDITY,
     CONF_HUMIDITY,
+    CONF_SHOWER,
     CONF_STARTUP_DELAY,
     CONF_TEMPERATURE,
     CONF_THERMOSTAT,
@@ -77,7 +81,27 @@ def _schema(defaults: dict[str, Any], include_name: bool) -> vol.Schema:
         _thermostat_schema(defaults.get(CONF_THERMOSTAT) or {}),
         {"collapsed": True},
     )
+    fields[vol.Optional(CONF_SHOWER)] = section(
+        _shower_schema(defaults.get(CONF_SHOWER) or {}),
+        {"collapsed": True},
+    )
     return vol.Schema(fields)
+
+
+def _shower_schema(current: dict[str, Any]) -> vol.Schema:
+    """Optional entities for shower humidity ventilation."""
+    humidity = selector.EntitySelector(
+        selector.EntitySelectorConfig(domain="sensor", device_class=SensorDeviceClass.HUMIDITY)
+    )
+    return vol.Schema(
+        {
+            _optional(CONF_BATH_HUMIDITY, current): humidity,
+            _optional(CONF_HOUSE_HUMIDITY, current): humidity,
+            _optional(CONF_EXHAUST_FAN, current): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["switch", "fan", "light", "input_boolean"])
+            ),
+        }
+    )
 
 
 def _optional(key: str, current: dict[str, Any]) -> vol.Optional:
