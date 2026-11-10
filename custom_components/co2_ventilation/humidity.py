@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -31,6 +33,12 @@ MIN_HIGH = timedelta(minutes=5)
 # From low, go back to high only if the bathroom climbs this far past
 # "high until" (a second shower), so it doesn't flicker around the line.
 REHIGH_MARGIN = 5.0
+# Time-to-off estimate: fit the last few minutes of readings while the
+# bathroom dries. Humidity falls off roughly exponentially toward the house,
+# so the fit is on log(difference).
+ETA_WINDOW = timedelta(minutes=10)
+ETA_MIN_SPAN = timedelta(minutes=3)
+ETA_MAX_MINUTES = 240.0
 
 
 @dataclass
@@ -56,6 +64,9 @@ class ShowerHumidity:
         self.diff: float | None = None
         self.started: datetime | None = None
         self._high_since: datetime | None = None
+        # Highest difference this shower; cleared once it's back in range.
+        self.peak: float | None = None
+        self._samples: deque[tuple[datetime, float]] = deque()
 
     @property
     def active(self) -> bool:
@@ -68,8 +79,46 @@ class ShowerHumidity:
         left = self.settings.max_run_minutes - (now - self.started).total_seconds() / 60
         return max(left, 0.0)
 
+    def eta_off(self, now: datetime) -> float | None:
+        """Estimated minutes until the shower logic turns the fan off, or None
+        while the bathroom isn't clearly drying yet."""
+        if not self.active or self.diff is None:
+            return None
+        off = self.settings.off_delta
+        if self.diff < off:
+            return 0.0
+        pts = [(t, d) for t, d in self._samples if now - t <= ETA_WINDOW and d > 0.5]
+        if len(pts) < 3 or pts[-1][0] - pts[0][0] < ETA_MIN_SPAN:
+            return None
+        xs = [(t - pts[0][0]).total_seconds() / 60 for t, _ in pts]
+        ys = [math.log(d) for _, d in pts]
+        mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+        den = sum((x - mx) ** 2 for x in xs)
+        if den == 0:
+            return None
+        slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
+        if slope >= -0.005:  # flat or still rising
+            return None
+        minutes = math.log(self.diff / max(off, 0.5)) / -slope
+        remaining = self.run_remaining(now)
+        if remaining is not None:
+            minutes = min(minutes, remaining)
+        return min(max(minutes, 0.0), ETA_MAX_MINUTES)
+
     def update(self, diff: float | None, now: datetime) -> str:
         """Feed in the latest bathroom-minus-house difference; returns the mode."""
+        mode = self._update(diff, now)
+        if self.active and diff is not None:
+            self.peak = diff if self.peak is None else max(self.peak, diff)
+            self._samples.append((now, diff))
+            while self._samples and now - self._samples[0][0] > ETA_WINDOW:
+                self._samples.popleft()
+        elif mode == MODE_OFF:
+            self.peak = None
+            self._samples.clear()
+        return mode
+
+    def _update(self, diff: float | None, now: datetime) -> str:
         s = self.settings
         self.diff = diff
 

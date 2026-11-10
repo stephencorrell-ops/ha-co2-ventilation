@@ -7,6 +7,7 @@ After updating in HACS, restart Home Assistant and refresh your dashboard (close
 ## 0.13.0
 
 - Shower humidity: the house reference can be several humidity sensors, averaged (offline ones are skipped). Leave it empty to keep using the thermostat's humidity. Existing single-sensor setups carry over.
+- CO2 card: a small bar under the Shower row while it's clearing humidity, with tick marks at the off, on and high-until settings, a marker at the shower's peak, and an estimate of how long until the fan turns off. Hidden between showers.
 
 ## 0.12.0
 

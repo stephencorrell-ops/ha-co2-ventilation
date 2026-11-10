@@ -136,6 +136,28 @@ class Co2VentilationCard extends HTMLElement {
     };
   }
 
+  _updateHumidityBar(running, diff, peak, mode, eta) {
+    const $ = (id) => this.shadowRoot.getElementById(id);
+    const bar = $("hbar");
+    if (!bar) return;
+    bar.hidden = !running;
+    if (!running) return;
+    const e = this._entities();
+    const off = this._num(e.soff, 5), on = this._num(e.son, 10), high = this._num(e.shigh, 20);
+    const scale = Math.max(30, high + 10);
+    const pos = (v) => `${(Math.min(Math.max(v, 0), scale) / scale) * 100}%`;
+    $("hfill").style.width = pos(diff);
+    $("hfill").style.background = mode === "high" ? "var(--primary-color)" : "color-mix(in srgb, var(--primary-color) 45%, transparent)";
+    $("htoff").style.left = pos(off);
+    $("hton").style.left = pos(on);
+    $("hthigh").style.left = pos(high);
+    $("hpeak").style.left = pos(Number.isFinite(peak) ? peak : diff);
+    $("htrack").setAttribute("aria-valuenow", String(Math.round(diff)));
+    let txt = "estimating\u2026";
+    if (Number.isFinite(eta)) txt = eta < 1 ? "off soon" : eta >= 60 ? `~${Math.floor(eta / 60)} h ${Math.round(eta % 60)} min` : `~${Math.round(eta)} min left`;
+    $("heta").textContent = txt;
+  }
+
   _num(id, fallback = null) {
     const v = parseFloat(this._hass.states[id]?.state);
     return Number.isFinite(v) ? v : fallback;
@@ -260,6 +282,13 @@ class Co2VentilationCard extends HTMLElement {
   .tg.on { background:var(--primary-color); }
   .tg.on::after { left:21px; }
   .sub { font-size:12px; color:var(--secondary-text-color); }
+  .hbar { display:flex; align-items:center; gap:10px; margin:-4px 0 6px 30px; }
+  .hbar[hidden] { display:none; }
+  .htrack { position:relative; flex:1; height:8px; border-radius:4px; background:var(--secondary-background-color); border:1px solid var(--divider-color); }
+  .hfill { position:absolute; left:0; top:0; bottom:0; border-radius:4px; transition:width .4s, background .4s; }
+  .htick { position:absolute; top:-3px; bottom:-3px; width:1.5px; background:var(--secondary-text-color); opacity:.55; }
+  .hpeak { position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px; border-radius:1px; background:var(--primary-text-color); transition:left .4s; }
+  .heta { flex:0 0 auto; min-width:64px; text-align:right; font-size:12px; color:var(--secondary-text-color); font-variant-numeric:tabular-nums; }
   .setpts.locked input[type=range] { pointer-events:none; opacity:.4; }
   .val { display:flex; align-items:center; justify-content:flex-end; gap:4px; }
   .val input { width:58px; box-sizing:border-box; text-align:right; font:inherit; font-size:14px; color:var(--primary-text-color); background:var(--secondary-background-color); border:1px solid var(--divider-color); border-radius:6px; padding:4px 6px; -moz-appearance:textfield; }
@@ -295,7 +324,8 @@ class Co2VentilationCard extends HTMLElement {
     <div class="row"><ha-icon icon="mdi:robot"></ha-icon><span class="l">Auto</span><span class="grow sub" id="autosub"></span><button class="tg" id="auto" aria-label="Auto ventilation"></button></div>
     <div class="row"><ha-icon icon="mdi:fan"></ha-icon><span class="l">HVAC fan</span><span class="grow sub" id="fansub"></span><button class="tg" id="fan" aria-label="HVAC fan"></button></div>
     ${e.speed ? `<div class="row"><ha-icon icon="mdi:fan-speed-1" id="speedicon"></ha-icon><span class="l">CO\u2082 speed</span><div class="seg" id="speed" role="group" aria-label="Ventilation speed">${(this._hass.states[e.speed]?.attributes?.options || Object.keys(SPEED_LABELS)).map((o) => `<button data-o="${esc(o)}">${esc(SPEED_LABELS[o] || o)}</button>`).join("")}</div></div>` : ""}
-    ${e.shower ? `<div class="row"><ha-icon icon="mdi:shower-head"></ha-icon><span class="l">Shower</span><span class="grow sub" id="showersub"></span><button class="tg" id="shower" aria-label="Shower ventilation"></button></div>` : ""}
+    ${e.shower ? `<div class="row"><ha-icon icon="mdi:shower-head"></ha-icon><span class="l">Shower</span><span class="grow sub" id="showersub"></span><button class="tg" id="shower" aria-label="Shower ventilation"></button></div>
+    <div class="hbar" id="hbar" hidden><div class="htrack" role="meter" aria-label="Bathroom humidity above house" id="htrack"><div class="hfill" id="hfill"></div><div class="htick" id="htoff"></div><div class="htick" id="hton"></div><div class="htick" id="hthigh"></div><div class="hpeak" id="hpeak"></div></div><span class="heta" id="heta"></span></div>` : ""}
     <div class="setpts locked" id="setpts">
       <div class="row"><ha-icon icon="mdi:tune-variant"></ha-icon><span class="l">Setpoints</span><span class="grow sub" id="locksub">Locked</span>
         <button class="lock" id="lock" aria-label="Unlock setpoints"><ha-icon icon="mdi:lock"></ha-icon><span id="locktxt">Unlock</span></button></div>
@@ -569,8 +599,12 @@ class Co2VentilationCard extends HTMLElement {
         if (hass.states[exhaust]?.state === "on" && (mode === "high" || mode === "low")) exhaustTxt = "exhaust fan on";
         else if (!d.attributes.exhaust_allowed) exhaustTxt = "exhaust off, no recent cooling";
       }
-      const parts = [Number.isFinite(diff) ? `Bathroom ${diff >= 0 ? "+" : ""}${Math.round(diff)}% vs. house` : "No reading", showerOn ? modeTxt : "Off", exhaustTxt];
+      const peak = d?.attributes?.peak;
+      const running = showerOn && (mode === "high" || mode === "low") && Number.isFinite(diff);
+      const peakTxt = running && Number.isFinite(peak) ? `peak +${Math.round(peak)}` : "";
+      const parts = [Number.isFinite(diff) ? `Bathroom ${diff >= 0 ? "+" : ""}${Math.round(diff)}%${running ? "" : " vs. house"}` : "No reading", showerOn ? modeTxt : "Off", peakTxt, exhaustTxt];
       $("showersub").textContent = parts.filter(Boolean).join(" \u00b7 ");
+      this._updateHumidityBar(running, diff, peak, mode, d?.attributes?.eta_off_min);
     }
     const remaining = hass.states[e.status]?.attributes?.min_run_remaining_s || 0;
     $("fansub").textContent = st === "min_run_hold" && remaining ? `${Math.ceil(remaining / 60)} min left` : fanOn ? "Running" : "Off";

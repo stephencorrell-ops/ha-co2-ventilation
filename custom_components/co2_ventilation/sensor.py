@@ -216,6 +216,8 @@ class ShowerHumiditySensor(Co2VentilationEntity, SensorEntity):
             "mode": shower.mode,
             "enabled": shower.enabled,
             "run_remaining_min": round(remaining) if remaining is not None else None,
+            "peak": shower.peak,
+            "eta_off_min": round(eta) if (eta := shower.eta_off(dt_util.utcnow())) is not None else None,
             "exhaust_fan": self.controller.shower_config.get("exhaust_fan"),
             "exhaust_allowed": self.controller.exhaust_allowed(),
             "bathroom_sensor": self.controller.shower_config.get("bathroom_humidity"),
