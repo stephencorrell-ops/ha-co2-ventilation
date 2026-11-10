@@ -183,6 +183,7 @@ class HvacActivitySensor(Co2VentilationEntity, SensorEntity):
             "heat_pump_aux": "mdi:fire",
             "aux_heat": "mdi:fire",
             "cooling": "mdi:snowflake",
+            "defrost": "mdi:snowflake-melt",
             "fan_only": "mdi:fan",
             "ventilating": "mdi:molecule-co2",
             "fan_manual": "mdi:fan",

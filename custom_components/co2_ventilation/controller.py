@@ -29,6 +29,7 @@ from homeassistant.util.percentage import ranged_value_to_percentage
 from .const import (
     ACTIVITY_AUX_HEAT,
     ACTIVITY_COOLING,
+    ACTIVITY_DEFROST,
     ACTIVITY_FAN_MANUAL,
     ACTIVITY_FAN_ONLY,
     ACTIVITY_HEAT_PUMP,
@@ -77,6 +78,9 @@ from .runtime import FanRuntimeTracker
 
 # How often to re-check the shower timers (minimum high time, maximum run).
 SHOWER_TICK = timedelta(seconds=30)
+# Cooling has to run this long without the heat strips before it counts, so
+# a defrost cycle (which also energizes Y and O) never looks like cooling.
+COOLING_MIN = timedelta(minutes=10)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -120,6 +124,7 @@ class Co2VentilationController:
         self.shower = ShowerHumidity()
         # When the air conditioning last ran (gates the bathroom exhaust fan).
         self.last_cooling: datetime | None = None
+        self._cooling_since: datetime | None = None
         self._on_since: datetime | None = None
         self._pending_off: CALLBACK_TYPE | None = None
         self._startup_timer: CALLBACK_TYPE | None = None
@@ -228,7 +233,11 @@ class Co2VentilationController:
             if self.shower_config[CONF_EXHAUST_FAN]:
                 # Watch for cooling, which decides whether the exhaust may run.
                 t = self.thermostat
-                watched += [e for e in (t[CONF_CALL_Y], t[CONF_CALL_OB], t[CONF_CLIMATE]) if e]
+                watched += [
+                    e
+                    for e in (t[CONF_CALL_Y], t[CONF_CALL_OB], t[CONF_CALL_W2], t[CONF_CLIMATE])
+                    if e
+                ]
             self._unsubs.append(
                 async_track_time_interval(self.hass, self._shower_tick, SHOWER_TICK)
             )
@@ -397,7 +406,9 @@ class Co2VentilationController:
         fan_on = self._fan_is_on()
         we_did = fan_on and self._we_turned_on
 
-        if y and w2:
+        if y and o and w2:
+            activity = ACTIVITY_DEFROST
+        elif y and w2:
             activity = ACTIVITY_HEAT_PUMP_AUX
         elif w2:
             activity = ACTIVITY_AUX_HEAT
@@ -500,17 +511,36 @@ class Co2VentilationController:
         if not self.shower_configured:
             return
         now = dt_util.utcnow()
-        if self.shower_config[CONF_EXHAUST_FAN] and self._cooling_now():
-            self.last_cooling = now
+        self._track_cooling(now)
         self.shower.update(self.humidity_diff(), now)
         if not self.shower.active:
             self._hum_suppressed = False
         self._apply_exhaust()
 
+    @callback
+    def _track_cooling(self, now: datetime) -> None:
+        """Record cooling once it has run COOLING_MIN without a break."""
+        if not self.shower_config[CONF_EXHAUST_FAN]:
+            return
+        if not self._cooling_now():
+            self._cooling_since = None
+            return
+        if self._cooling_since is None:
+            self._cooling_since = now
+        if now - self._cooling_since >= COOLING_MIN:
+            self.last_cooling = now
+
     def _cooling_now(self) -> bool:
-        """Is the air conditioning running? From the 24 V calls, else the thermostat."""
+        """Is the air conditioning running? From the 24 V calls, else the thermostat.
+
+        Y + O alone is cooling; Y + O with W2 is a defrost cycle.
+        """
         if self.thermostat[CONF_CALL_Y] and self.thermostat[CONF_CALL_OB]:
-            return self._call_on(CONF_CALL_Y) and self._call_on(CONF_CALL_OB)
+            return (
+                self._call_on(CONF_CALL_Y)
+                and self._call_on(CONF_CALL_OB)
+                and not self._call_on(CONF_CALL_W2)
+            )
         climate = self.thermostat[CONF_CLIMATE]
         state = self.hass.states.get(climate) if climate else None
         return state is not None and state.attributes.get("hvac_action") == "cooling"
@@ -596,9 +626,15 @@ class Co2VentilationController:
         )
 
     @callback
-    def _shower_tick(self, _now: datetime) -> None:
+    def _shower_tick(self, now: datetime) -> None:
         if self.shower.mode != "off":
             self.evaluate()
+        elif self._cooling_since is not None:
+            # A long cooling run has no state changes; check its length here.
+            had = self.last_cooling
+            self._track_cooling(dt_util.utcnow())
+            if self.last_cooling != had:
+                self._notify()
 
     def min_run_remaining(self) -> float:
         """Seconds left before the fan may be turned off."""

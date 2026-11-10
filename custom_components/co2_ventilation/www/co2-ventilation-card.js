@@ -28,6 +28,7 @@ const ACTIVITY = {
   heat_pump_aux: { text: "Heat pump + heat strips", color: "#e34948" },
   aux_heat: { text: "Heat strips", color: "#e34948" },
   cooling: { text: "Cooling", color: "#2a78d6" },
+  defrost: { text: "Defrost, heat strips on", color: "#e34948" },
   fan_only: { text: "Fan only", color: "#888780" },
   ventilating: { text: "Ventilating", color: "#1baf7a" },
   fan_manual: { text: "Fan on", color: "#6250d6" },
@@ -724,10 +725,11 @@ const MODE_LABEL = { heat: "Heat pump", strips: "Heat strips", cool: "Cooling", 
 const MODE_LANE = { heat: "Heat", strips: "Strips", cool: "Cool", fan: "Fan", vent: "Vent" };
 
 // Decide what the system is doing from the 24 V calls (O is on in cooling).
+// Y + O + W2 is a defrost cycle (heat pump reversed, strips on), not cooling.
 const modesFrom = (g, y, o, w2, vent) => {
   const m = [];
   if (y && !o) m.push("heat");
-  if (y && o) m.push("cool");
+  if (y && o && !w2) m.push("cool");
   if (w2) m.push("strips");
   if (g && !y && !w2) m.push("fan");
   if (vent) m.push("vent");
@@ -1130,7 +1132,8 @@ class Co2ThermostatCard extends HTMLElement {
     const modes = modesFrom(this._on(e.g), this._on(e.y), this._on(e.o), this._on(e.w2), vent);
     const main = modes.filter((m) => m !== "vent");
     const pill = $("pill");
-    const label = main.length ? main.map((m) => MODE_LABEL[m]).join(" + ") : vent ? MODE_LABEL.vent : "Idle";
+    const defrost = this._on(e.y) && this._on(e.o) && this._on(e.w2);
+    const label = defrost ? "Defrost, heat strips on" : main.length ? main.map((m) => MODE_LABEL[m]).join(" + ") : vent ? MODE_LABEL.vent : "Idle";
     const color = MODE_COLOR[main[0] || (vent ? "vent" : "")];
     pill.textContent = label;
     pill.style.background = color ? `${color}26` : "";

@@ -132,6 +132,7 @@
           "heat_pump_aux": "Heat pump + heat strips",
           "aux_heat": "Heat strips",
           "cooling": "Cooling",
+          "defrost": "Defrost (heat strips on)",
           "fan_only": "Fan only",
           "ventilating": "CO2 ventilating",
           "fan_manual": "Fan on by hand"

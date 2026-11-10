@@ -213,7 +213,7 @@ async def test_switch_off_disables(hass: HomeAssistant) -> None:
     assert hass.states.get(FAN).state == "off"
 
 
-CALL_Y, CALL_O = "binary_sensor.call_y", "binary_sensor.call_o"
+CALL_Y, CALL_O, CALL_W2 = "binary_sensor.call_y", "binary_sensor.call_o", "binary_sensor.call_w2"
 NEST = "climate.nest"
 LAST_COOL = "sensor.co2_ventilation_last_cooling_run"
 
@@ -221,20 +221,22 @@ LAST_COOL = "sensor.co2_ventilation_last_cooling_run"
 async def _setup_exhaust(hass: HomeAssistant, calls: bool = True):
     hass.states.async_set(CALL_Y, "off")
     hass.states.async_set(CALL_O, "off")
+    hass.states.async_set(CALL_W2, "off")
     hass.states.async_set(NEST, "heat", {"hvac_action": "idle"})
     await _setup(hass, {"bathroom_humidity": BATH, "exhaust_fan": EXHAUST})
     entry = hass.config_entries.async_entries(DOMAIN)[0]
     thermostat = {"humidity_sensor": NEST_HUM, "climate_entity": NEST}
     if calls:
-        thermostat |= {"call_y": CALL_Y, "call_ob": CALL_O}
+        thermostat |= {"call_y": CALL_Y, "call_ob": CALL_O, "call_w2": CALL_W2}
     hass.config_entries.async_update_entry(entry, options={**entry.data, "thermostat": thermostat})
     await _settle(hass)
 
 
-async def _cool(hass: HomeAssistant) -> None:
+async def _cool(hass: HomeAssistant, freezer, minutes: float = 15) -> None:
     hass.states.async_set(CALL_Y, "on")
     hass.states.async_set(CALL_O, "on")
     await _settle(hass)
+    await _advance(hass, freezer, minutes)
     hass.states.async_set(CALL_Y, "off")
     hass.states.async_set(CALL_O, "off")
     await _settle(hass)
@@ -254,7 +256,7 @@ async def test_exhaust_stays_off_in_heating_season(hass: HomeAssistant) -> None:
 
 async def test_exhaust_runs_after_recent_cooling(hass: HomeAssistant, freezer) -> None:
     await _setup_exhaust(hass)
-    await _cool(hass)
+    await _cool(hass, freezer)
     assert hass.states.get(LAST_COOL).state != "unknown"
     await _advance(hass, freezer, 60 * 24 * 3)  # 3 days later
     await _bath(hass, 70)
@@ -265,7 +267,7 @@ async def test_exhaust_runs_after_recent_cooling(hass: HomeAssistant, freezer) -
 
 async def test_exhaust_window_expires(hass: HomeAssistant, freezer) -> None:
     await _setup_exhaust(hass)
-    await _cool(hass)
+    await _cool(hass, freezer)
     await _advance(hass, freezer, 60 * 24 * 8)  # 8 days: past the 7 day window
     await _bath(hass, 70)
     assert hass.states.get(EXHAUST).state == "off"
@@ -282,7 +284,7 @@ async def test_exhaust_window_expires(hass: HomeAssistant, freezer) -> None:
 
 async def test_exhaust_finishes_the_shower_it_started(hass: HomeAssistant, freezer) -> None:
     await _setup_exhaust(hass)
-    await _cool(hass)
+    await _cool(hass, freezer)
     await _advance(hass, freezer, 60 * 24 * 7 - 10)  # just inside the window
     await _bath(hass, 70)
     assert hass.states.get(EXHAUST).state == "on"
@@ -291,10 +293,11 @@ async def test_exhaust_finishes_the_shower_it_started(hass: HomeAssistant, freez
     assert hass.states.get(EXHAUST).state == "on"
 
 
-async def test_cooling_from_thermostat_without_calls(hass: HomeAssistant) -> None:
+async def test_cooling_from_thermostat_without_calls(hass: HomeAssistant, freezer) -> None:
     await _setup_exhaust(hass, calls=False)
     hass.states.async_set(NEST, "cool", {"hvac_action": "cooling"})
     await _settle(hass)
+    await _advance(hass, freezer, 15)
     await _bath(hass, 70)
     assert hass.states.get(EXHAUST).state == "on"
 
@@ -332,3 +335,39 @@ async def test_threshold_validation(hass: HomeAssistant) -> None:
     )
     await _bath(hass, 53)  # +13: under the new 15
     assert hass.states.get(FAN).state == "off"
+
+
+
+async def test_defrost_is_not_cooling(hass: HomeAssistant, freezer) -> None:
+    await _setup_exhaust(hass)
+    # Defrost: Y + O with the heat strips, for longer than the 10 minutes.
+    for e in (CALL_Y, CALL_O, CALL_W2):
+        hass.states.async_set(e, "on")
+    await _settle(hass)
+    assert hass.states.get(ACT).state == "defrost"
+    await _advance(hass, freezer, 15)
+    for e in (CALL_Y, CALL_O, CALL_W2):
+        hass.states.async_set(e, "off")
+    await _settle(hass)
+    assert hass.states.get(LAST_COOL).state == "unknown"
+    await _bath(hass, 70)
+    assert hass.states.get(EXHAUST).state == "off"
+
+
+async def test_short_cooling_blip_does_not_count(hass: HomeAssistant, freezer) -> None:
+    await _setup_exhaust(hass)
+    await _cool(hass, freezer, minutes=3)  # e.g. calls landing out of order
+    assert hass.states.get(LAST_COOL).state == "unknown"
+    await _bath(hass, 70)
+    assert hass.states.get(EXHAUST).state == "off"
+
+
+async def test_long_cooling_run_counts_without_state_changes(hass: HomeAssistant, freezer) -> None:
+    await _setup_exhaust(hass)
+    hass.states.async_set(CALL_Y, "on")
+    hass.states.async_set(CALL_O, "on")
+    await _settle(hass)
+    assert hass.states.get(ACT).state == "cooling"
+    for _ in range(24):  # 12 minutes of half-minute ticks, nothing else changing
+        await _advance(hass, freezer, 0.5)
+    assert hass.states.get(LAST_COOL).state != "unknown"

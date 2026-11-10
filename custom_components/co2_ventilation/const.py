@@ -61,6 +61,9 @@ ACTIVITY_HEAT_PUMP = "heat_pump"
 ACTIVITY_HEAT_PUMP_AUX = "heat_pump_aux"
 ACTIVITY_AUX_HEAT = "aux_heat"
 ACTIVITY_COOLING = "cooling"
+# Y + O + W2: the heat pump is defrosting its outdoor coil (running in
+# reverse) with the heat strips on. Not cooling.
+ACTIVITY_DEFROST = "defrost"
 ACTIVITY_FAN_ONLY = "fan_only"
 ACTIVITY_VENTILATING = "ventilating"
 ACTIVITY_FAN_MANUAL = "fan_manual"
@@ -70,6 +73,7 @@ ACTIVITIES = [
     ACTIVITY_HEAT_PUMP_AUX,
     ACTIVITY_AUX_HEAT,
     ACTIVITY_COOLING,
+    ACTIVITY_DEFROST,
     ACTIVITY_FAN_ONLY,
     ACTIVITY_VENTILATING,
     ACTIVITY_FAN_MANUAL,

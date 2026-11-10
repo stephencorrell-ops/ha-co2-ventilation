@@ -55,7 +55,7 @@ With the default name, the entity IDs are:
 | `sensor.co2_ventilation_fan_runtime_total` | Lifetime blower hours (never resets) |
 | `button.co2_ventilation_reset_filter_runtime` | Press after changing the filter; also sets the date below to today |
 | `date.co2_ventilation_last_filter_change` | When the filter was last changed; set it by hand for an earlier change |
-| `sensor.co2_ventilation_hvac_activity` | What the HVAC is doing: Idle, Heat pump heating, Heat pump + heat strips, Heat strips, Cooling, Fan only, CO2 ventilating, Fan on by hand. Attributes say who called for it (`called_by`: thermostat, co2, manual), the thermostat's name, and the speed the blower is actually running (`fan_speed`) |
+| `sensor.co2_ventilation_hvac_activity` | What the HVAC is doing: Idle, Heat pump heating, Heat pump + heat strips, Heat strips, Cooling, Defrost, Fan only, CO2 ventilating, Fan on by hand. Attributes say who called for it (`called_by`: thermostat, co2, manual), the thermostat's name, and the speed the blower is actually running (`fan_speed`) |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
 
 ## Shower humidity
@@ -64,7 +64,7 @@ Under **Configure → Shower humidity (optional)**, pick:
 
 - **Bathroom humidity sensor**
 - **House humidity sensor**: leave empty to use the thermostat's humidity sensor
-- **Bathroom exhaust fan** (optional): a switch, fan, light or input boolean. It runs for the shower only if the air conditioning ran within the **Exhaust fan cooling window** (7 days by default), detected from the Y and O call inputs or the thermostat reporting cooling. In heating season it stays off so the shower's moisture helps humidify the house; the HVAC blower still spreads it around. Once started, it runs to the end of that shower.
+- **Bathroom exhaust fan** (optional): a switch, fan, light or input boolean. It runs for the shower only if the air conditioning ran within the **Exhaust fan cooling window** (7 days by default), detected as 10 minutes of the Y and O calls without the heat strips (a defrost cycle has W2 on too, so it never counts), or the thermostat reporting cooling for 10 minutes. In heating season it stays off so the shower's moisture helps humidify the house; the HVAC blower still spreads it around. Once started, it runs to the end of that shower.
 
 How it runs, in humidity points of the bathroom above the house (52 % against 40 % is +12):
 
