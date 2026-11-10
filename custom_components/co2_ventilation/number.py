@@ -37,7 +37,9 @@ from .humidity import (
     DEFAULT_MAX_RUN,
     DEFAULT_OFF_DELTA,
     DEFAULT_ON_DELTA,
+    DEFAULT_EXHAUST_COOLING_DAYS,
     DELTA_MAX,
+    EXHAUST_COOLING_DAYS_MAX,
     MAX_RUN_MAX,
 )
 
@@ -99,6 +101,8 @@ async def async_setup_entry(
     ]
     if controller.shower_configured:
         entities += [ShowerNumber(controller, spec) for spec in SHOWER_SPECS]
+        if controller.shower_config.get("exhaust_fan"):
+            entities.append(ShowerNumber(controller, EXHAUST_SPEC))
     async_add_entities(entities)
 
 
@@ -212,6 +216,18 @@ SHOWER_SPECS = (
 )
 
 
+EXHAUST_SPEC = _Spec(
+    key="exhaust_cooling_days",
+    default=DEFAULT_EXHAUST_COOLING_DAYS,
+    min_value=1,
+    max_value=EXHAUST_COOLING_DAYS_MAX,
+    step=1,
+    unit=UnitOfTime.DAYS,
+    device_class=NumberDeviceClass.DURATION,
+    icon="mdi:snowflake-clock",
+)
+
+
 class ShowerNumber(Co2VentilationEntity, RestoreNumber):
     """A shower humidity threshold or the maximum run time."""
 
@@ -243,7 +259,7 @@ class ShowerNumber(Co2VentilationEntity, RestoreNumber):
         off = value if key == "off_delta" else s.off_delta
         on = value if key == "on_delta" else s.on_delta
         high = value if key == "high_until" else s.high_until
-        if key != "max_run_minutes" and (off >= on or off >= high):
+        if key in ("on_delta", "high_until", "off_delta") and (off >= on or off >= high):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="shower_off_too_high",

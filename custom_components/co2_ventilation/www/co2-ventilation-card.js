@@ -562,7 +562,13 @@ class Co2VentilationCard extends HTMLElement {
       const diff = parseFloat(d?.state);
       const mode = d?.attributes?.mode;
       const modeTxt = { high: "running high", low: "running low", lockout: "hit max run, waiting to dry" }[mode] || "";
-      const parts = [Number.isFinite(diff) ? `Bathroom ${diff >= 0 ? "+" : ""}${Math.round(diff)}% vs. house` : "No reading", showerOn ? modeTxt : "Off"];
+      const exhaust = d?.attributes?.exhaust_fan;
+      let exhaustTxt = "";
+      if (exhaust && showerOn) {
+        if (hass.states[exhaust]?.state === "on" && (mode === "high" || mode === "low")) exhaustTxt = "exhaust fan on";
+        else if (!d.attributes.exhaust_allowed) exhaustTxt = "exhaust off, no recent cooling";
+      }
+      const parts = [Number.isFinite(diff) ? `Bathroom ${diff >= 0 ? "+" : ""}${Math.round(diff)}% vs. house` : "No reading", showerOn ? modeTxt : "Off", exhaustTxt];
       $("showersub").textContent = parts.filter(Boolean).join(" \u00b7 ");
     }
     const remaining = hass.states[e.status]?.attributes?.min_run_remaining_s || 0;

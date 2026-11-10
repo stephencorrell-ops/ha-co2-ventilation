@@ -14,6 +14,7 @@ from homeassistant.const import CONCENTRATION_PARTS_PER_MILLION, UnitOfTime
 from homeassistant.util import dt as dt_util
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.restore_state import RestoreEntity
 try:
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 except ImportError:  # Home Assistant before 2025.2
@@ -40,6 +41,11 @@ async def async_setup_entry(
             *(
                 [ShowerHumiditySensor(controller, "shower_humidity_diff")]
                 if controller.shower_configured
+                else []
+            ),
+            *(
+                [LastCoolingSensor(controller, "last_cooling")]
+                if controller.shower_configured and controller.shower_config.get("exhaust_fan")
                 else []
             ),
             FanRuntimeSensor(controller, "filter_runtime"),
@@ -209,6 +215,26 @@ class ShowerHumiditySensor(Co2VentilationEntity, SensorEntity):
             "mode": shower.mode,
             "enabled": shower.enabled,
             "run_remaining_min": round(remaining) if remaining is not None else None,
+            "exhaust_fan": self.controller.shower_config.get("exhaust_fan"),
+            "exhaust_allowed": self.controller.exhaust_allowed(),
             "bathroom_sensor": self.controller.shower_config.get("bathroom_humidity"),
             "house_sensor": self.controller._house_humidity_source(),
         }
+
+
+class LastCoolingSensor(Co2VentilationEntity, RestoreEntity, SensorEntity):
+    """When the air conditioning last ran. The bathroom exhaust fan only runs
+    for a shower if this is within the cooling window."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:snowflake-clock"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and self.controller.last_cooling is None:
+            self.controller.last_cooling = dt_util.parse_datetime(last.state)
+
+    @property
+    def native_value(self):
+        return self.controller.last_cooling

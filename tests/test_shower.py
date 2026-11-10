@@ -213,12 +213,101 @@ async def test_switch_off_disables(hass: HomeAssistant) -> None:
     assert hass.states.get(FAN).state == "off"
 
 
-async def test_exhaust_fan_runs_for_the_shower(hass: HomeAssistant) -> None:
+CALL_Y, CALL_O = "binary_sensor.call_y", "binary_sensor.call_o"
+NEST = "climate.nest"
+LAST_COOL = "sensor.co2_ventilation_last_cooling_run"
+
+
+async def _setup_exhaust(hass: HomeAssistant, calls: bool = True):
+    hass.states.async_set(CALL_Y, "off")
+    hass.states.async_set(CALL_O, "off")
+    hass.states.async_set(NEST, "heat", {"hvac_action": "idle"})
     await _setup(hass, {"bathroom_humidity": BATH, "exhaust_fan": EXHAUST})
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    thermostat = {"humidity_sensor": NEST_HUM, "climate_entity": NEST}
+    if calls:
+        thermostat |= {"call_y": CALL_Y, "call_ob": CALL_O}
+    hass.config_entries.async_update_entry(entry, options={**entry.data, "thermostat": thermostat})
+    await _settle(hass)
+
+
+async def _cool(hass: HomeAssistant) -> None:
+    hass.states.async_set(CALL_Y, "on")
+    hass.states.async_set(CALL_O, "on")
+    await _settle(hass)
+    hass.states.async_set(CALL_Y, "off")
+    hass.states.async_set(CALL_O, "off")
+    await _settle(hass)
+
+
+async def test_exhaust_stays_off_in_heating_season(hass: HomeAssistant) -> None:
+    await _setup_exhaust(hass)
+    assert hass.states.get(LAST_COOL).state == "unknown"
+    await _bath(hass, 70)
+    assert hass.states.get(FAN).state == "on"  # the blower still spreads it
+    assert hass.states.get(EXHAUST).state == "off"
+    # Heat pump heating (Y without O) isn't cooling.
+    hass.states.async_set(CALL_Y, "on")
+    await _settle(hass)
+    assert hass.states.get(LAST_COOL).state == "unknown"
+
+
+async def test_exhaust_runs_after_recent_cooling(hass: HomeAssistant, freezer) -> None:
+    await _setup_exhaust(hass)
+    await _cool(hass)
+    assert hass.states.get(LAST_COOL).state != "unknown"
+    await _advance(hass, freezer, 60 * 24 * 3)  # 3 days later
     await _bath(hass, 70)
     assert hass.states.get(EXHAUST).state == "on"
     await _bath(hass, 42)
     assert hass.states.get(EXHAUST).state == "off"
+
+
+async def test_exhaust_window_expires(hass: HomeAssistant, freezer) -> None:
+    await _setup_exhaust(hass)
+    await _cool(hass)
+    await _advance(hass, freezer, 60 * 24 * 8)  # 8 days: past the 7 day window
+    await _bath(hass, 70)
+    assert hass.states.get(EXHAUST).state == "off"
+    await _bath(hass, 42)
+    # A longer window lets it run again.
+    await hass.services.async_call(
+        "number", "set_value",
+        {"entity_id": "number.co2_ventilation_exhaust_fan_cooling_window", "value": 14},
+        blocking=True,
+    )
+    await _bath(hass, 70)
+    assert hass.states.get(EXHAUST).state == "on"
+
+
+async def test_exhaust_finishes_the_shower_it_started(hass: HomeAssistant, freezer) -> None:
+    await _setup_exhaust(hass)
+    await _cool(hass)
+    await _advance(hass, freezer, 60 * 24 * 7 - 10)  # just inside the window
+    await _bath(hass, 70)
+    assert hass.states.get(EXHAUST).state == "on"
+    await _advance(hass, freezer, 30)  # window closes mid-shower
+    await _bath(hass, 68)
+    assert hass.states.get(EXHAUST).state == "on"
+
+
+async def test_cooling_from_thermostat_without_calls(hass: HomeAssistant) -> None:
+    await _setup_exhaust(hass, calls=False)
+    hass.states.async_set(NEST, "cool", {"hvac_action": "cooling"})
+    await _settle(hass)
+    await _bath(hass, 70)
+    assert hass.states.get(EXHAUST).state == "on"
+
+
+async def test_last_cooling_survives_restart(hass: HomeAssistant) -> None:
+    from homeassistant.core import State
+    from pytest_homeassistant_custom_component.common import mock_restore_cache
+
+    recent = (dt_util.utcnow() - timedelta(days=2)).isoformat()
+    mock_restore_cache(hass, [State(LAST_COOL, recent)])
+    await _setup_exhaust(hass)
+    await _bath(hass, 70)
+    assert hass.states.get(EXHAUST).state == "on"
 
 
 async def test_house_sensor_override(hass: HomeAssistant) -> None:

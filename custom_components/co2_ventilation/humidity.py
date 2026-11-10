@@ -18,6 +18,11 @@ DEFAULT_ON_DELTA = 10.0
 DEFAULT_HIGH_UNTIL = 20.0
 DEFAULT_OFF_DELTA = 5.0
 DEFAULT_MAX_RUN = 90.0  # minutes
+# The bathroom exhaust fan only runs if the air conditioning has run within
+# this many days: in heating season the shower's moisture is left in the
+# house to help the humidifier.
+DEFAULT_EXHAUST_COOLING_DAYS = 7.0
+EXHAUST_COOLING_DAYS_MAX = 60.0
 DELTA_MAX = 50.0
 MAX_RUN_MAX = 240.0
 # Stay on high at least this long, so a short shower that peaks below the
@@ -34,6 +39,7 @@ class ShowerSettings:
     high_until: float = DEFAULT_HIGH_UNTIL
     off_delta: float = DEFAULT_OFF_DELTA
     max_run_minutes: float = DEFAULT_MAX_RUN
+    exhaust_cooling_days: float = DEFAULT_EXHAUST_COOLING_DAYS
 
 
 class ShowerHumidity:

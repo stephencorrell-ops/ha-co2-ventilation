@@ -64,7 +64,7 @@ Under **Configure → Shower humidity (optional)**, pick:
 
 - **Bathroom humidity sensor**
 - **House humidity sensor**: leave empty to use the thermostat's humidity sensor
-- **Bathroom exhaust fan** (optional): a switch, fan, light or input boolean, turned on for the whole shower
+- **Bathroom exhaust fan** (optional): a switch, fan, light or input boolean. It runs for the shower only if the air conditioning ran within the **Exhaust fan cooling window** (7 days by default), detected from the Y and O call inputs or the thermostat reporting cooling. In heating season it stays off so the shower's moisture helps humidify the house; the HVAC blower still spreads it around. Once started, it runs to the end of that shower.
 
 How it runs, in humidity points of the bathroom above the house (52 % against 40 % is +12):
 
@@ -84,6 +84,8 @@ The shower and CO2 share the fan: it runs at the higher of the two speeds and on
 | `number.co2_ventilation_shower_high_until` | High until (default +20) |
 | `number.co2_ventilation_shower_off_below` | Off below (default +5) |
 | `number.co2_ventilation_shower_maximum_run` | Maximum run (default 90 minutes) |
+| `number.co2_ventilation_exhaust_fan_cooling_window` | Exhaust fan runs only if cooling ran within this many days (default 7; only with an exhaust fan) |
+| `sensor.co2_ventilation_last_cooling_run` | When the air conditioning last ran (only with an exhaust fan) |
 
 ## Thermostat and fan runtime
 

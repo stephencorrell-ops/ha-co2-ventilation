@@ -39,7 +39,7 @@
             },
             "data_description": {
               "house_humidity": "Leave empty to use the thermostat's humidity sensor.",
-              "exhaust_fan": "Optional. Turned on for the whole shower and off afterwards."
+              "exhaust_fan": "Optional. Turned on for the shower only if the air conditioning ran in the last week (adjustable), so in heating season the shower's moisture stays in the house."
             }
           }
         }
@@ -85,7 +85,7 @@
             },
             "data_description": {
               "house_humidity": "Leave empty to use the thermostat's humidity sensor.",
-              "exhaust_fan": "Optional. Turned on for the whole shower and off afterwards."
+              "exhaust_fan": "Optional. Turned on for the shower only if the air conditioning ran in the last week (adjustable), so in heating season the shower's moisture stays in the house."
             }
           }
         }
@@ -103,7 +103,8 @@
       "shower_on_delta": { "name": "Shower on above house" },
       "shower_high_until": { "name": "Shower high until" },
       "shower_off_delta": { "name": "Shower off below" },
-      "shower_max_run_minutes": { "name": "Shower maximum run" }
+      "shower_max_run_minutes": { "name": "Shower maximum run" },
+      "shower_exhaust_cooling_days": { "name": "Exhaust fan cooling window" }
     },
     "select": {
       "speed": {
@@ -137,6 +138,7 @@
         }
       },
       "shower_humidity_diff": { "name": "Bathroom humidity above house" },
+      "last_cooling": { "name": "Last cooling run" },
       "filter_runtime": { "name": "Fan runtime since filter change" },
       "total_runtime": { "name": "Fan runtime total" },
       "status": {

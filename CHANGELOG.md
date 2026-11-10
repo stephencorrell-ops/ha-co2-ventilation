@@ -9,7 +9,7 @@ After updating in HACS, restart Home Assistant and refresh your dashboard (close
 - New **shower humidity ventilation**. Pick a bathroom humidity sensor under Configure → Shower humidity. When the bathroom gets well above the house's humidity, the fan runs at its top speed; once it falls back it drops to low; when it's close to the house again it turns off. Defaults: on at +10, high until +20, off below +5 (humidity points), with high held at least 5 minutes and a 90 minute maximum run. A dead sensor stops it, and a fan switched off by hand mid-shower stays off for that shower.
 - The house reference is the thermostat's humidity sensor unless you pick another one.
 - Shower and CO2 share the fan: it runs at whichever speed is higher and only turns off when neither needs it.
-- Optional bathroom exhaust fan, turned on for the whole shower.
+- Optional bathroom exhaust fan for the shower, but only in cooling season: it runs only if the air conditioning ran in the last 7 days (adjustable, detected from the Y and O calls or the thermostat). In heating season the shower's moisture stays in the house to help the humidifier, while the HVAC blower still spreads it around. A new Last cooling run sensor remembers when cooling last ran, across restarts.
 - The CO2 card shows a Shower row with the bathroom's humidity over the house, and the shower thresholds next to the CO2 setpoints. The status row shows shower humidity as a caller. The speed buttons are now labelled CO2 speed.
 
 ## 0.11.0

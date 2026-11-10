@@ -118,6 +118,8 @@ class Co2VentilationController:
         self._target_level: int | None = None
         self._exhaust_requested = False
         self.shower = ShowerHumidity()
+        # When the air conditioning last ran (gates the bathroom exhaust fan).
+        self.last_cooling: datetime | None = None
         self._on_since: datetime | None = None
         self._pending_off: CALLBACK_TYPE | None = None
         self._startup_timer: CALLBACK_TYPE | None = None
@@ -223,6 +225,10 @@ class Co2VentilationController:
                 for e in (self.shower_config[CONF_BATH_HUMIDITY], self._house_humidity_source())
                 if e
             ]
+            if self.shower_config[CONF_EXHAUST_FAN]:
+                # Watch for cooling, which decides whether the exhaust may run.
+                t = self.thermostat
+                watched += [e for e in (t[CONF_CALL_Y], t[CONF_CALL_OB], t[CONF_CLIMATE]) if e]
             self._unsubs.append(
                 async_track_time_interval(self.hass, self._shower_tick, SHOWER_TICK)
             )
@@ -493,10 +499,28 @@ class Co2VentilationController:
     def _update_shower(self) -> None:
         if not self.shower_configured:
             return
-        self.shower.update(self.humidity_diff(), dt_util.utcnow())
+        now = dt_util.utcnow()
+        if self.shower_config[CONF_EXHAUST_FAN] and self._cooling_now():
+            self.last_cooling = now
+        self.shower.update(self.humidity_diff(), now)
         if not self.shower.active:
             self._hum_suppressed = False
         self._apply_exhaust()
+
+    def _cooling_now(self) -> bool:
+        """Is the air conditioning running? From the 24 V calls, else the thermostat."""
+        if self.thermostat[CONF_CALL_Y] and self.thermostat[CONF_CALL_OB]:
+            return self._call_on(CONF_CALL_Y) and self._call_on(CONF_CALL_OB)
+        climate = self.thermostat[CONF_CLIMATE]
+        state = self.hass.states.get(climate) if climate else None
+        return state is not None and state.attributes.get("hvac_action") == "cooling"
+
+    def exhaust_allowed(self) -> bool:
+        """The exhaust fan may start only if cooling ran recently."""
+        if self.last_cooling is None:
+            return False
+        window = timedelta(days=self.shower.settings.exhaust_cooling_days)
+        return dt_util.utcnow() - self.last_cooling <= window
 
     def _shower_level(self) -> int | None:
         """Fan speed the shower wants: top speed on high, speed 1 on low."""
@@ -545,11 +569,15 @@ class Co2VentilationController:
 
     @callback
     def _apply_exhaust(self) -> None:
-        """Run the bathroom exhaust fan, if there is one, for the whole shower."""
+        """Run the bathroom exhaust fan for the shower, in cooling season only.
+
+        It starts only if the air conditioning ran within the cooling window;
+        once started it runs to the end of that shower.
+        """
         exhaust = self.shower_config[CONF_EXHAUST_FAN]
         if not exhaust:
             return
-        want = self.shower.active
+        want = self.shower.active and (self._exhaust_requested or self.exhaust_allowed())
         if want == self._exhaust_requested:
             return
         self._exhaust_requested = want
