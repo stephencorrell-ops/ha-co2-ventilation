@@ -156,22 +156,38 @@ class Co2VentilationController:
         return {key: section.get(key) or None for key in THERMOSTAT_KEYS}
 
     @property
-    def shower_config(self) -> dict[str, str | None]:
-        """Optional shower humidity entities."""
+    def shower_config(self) -> dict[str, Any]:
+        """Optional shower humidity entities. House humidity is a list (one
+        or more sensors, averaged); older setups stored a single entity."""
         section = self._conf(CONF_SHOWER) or {}
-        return {key: section.get(key) or None for key in SHOWER_KEYS}
+        config: dict[str, Any] = {key: section.get(key) or None for key in SHOWER_KEYS}
+        house = config[CONF_HOUSE_HUMIDITY]
+        if isinstance(house, str):
+            house = [house]
+        config[CONF_HOUSE_HUMIDITY] = [e for e in (house or []) if e] or None
+        return config
 
     @property
     def shower_configured(self) -> bool:
         return bool(self.shower_config[CONF_BATH_HUMIDITY])
 
-    def _house_humidity_source(self) -> str | None:
-        """The house reference: the chosen sensor, else the thermostat's."""
-        return (
-            self.shower_config[CONF_HOUSE_HUMIDITY]
-            or self.thermostat[CONF_HUMIDITY]
-            or self.thermostat[CONF_CLIMATE]
-        )
+    def house_humidity_sources(self) -> list[str]:
+        """The house reference: the chosen sensors (averaged), else the
+        thermostat's humidity."""
+        chosen = self.shower_config[CONF_HOUSE_HUMIDITY]
+        if chosen:
+            return list(chosen)
+        fallback = self.thermostat[CONF_HUMIDITY] or self.thermostat[CONF_CLIMATE]
+        return [fallback] if fallback else []
+
+    def house_humidity(self) -> float | None:
+        """Average of the house sensors that have a reading right now."""
+        readings = [
+            v for v in (self._humidity_of(e) for e in self.house_humidity_sources()) if v is not None
+        ]
+        if not readings:
+            return None
+        return round(sum(readings) / len(readings), 1)
 
     def _humidity_of(self, entity_id: str | None) -> float | None:
         if not entity_id:
@@ -192,7 +208,7 @@ class Co2VentilationController:
     def humidity_diff(self) -> float | None:
         """Bathroom minus house, in humidity points."""
         bath = self._humidity_of(self.shower_config[CONF_BATH_HUMIDITY])
-        house = self._humidity_of(self._house_humidity_source())
+        house = self.house_humidity()
         if bath is None or house is None:
             return None
         return round(bath - house, 1)
@@ -225,11 +241,7 @@ class Co2VentilationController:
         """Start tracking. Call after the entities have restored their state."""
         watched = [*self.sensors, self.fan_entity]
         if self.shower_configured:
-            watched += [
-                e
-                for e in (self.shower_config[CONF_BATH_HUMIDITY], self._house_humidity_source())
-                if e
-            ]
+            watched += [self.shower_config[CONF_BATH_HUMIDITY], *self.house_humidity_sources()]
             if self.shower_config[CONF_EXHAUST_FAN]:
                 # Watch for cooling, which decides whether the exhaust may run.
                 t = self.thermostat

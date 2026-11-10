@@ -219,7 +219,8 @@ class ShowerHumiditySensor(Co2VentilationEntity, SensorEntity):
             "exhaust_fan": self.controller.shower_config.get("exhaust_fan"),
             "exhaust_allowed": self.controller.exhaust_allowed(),
             "bathroom_sensor": self.controller.shower_config.get("bathroom_humidity"),
-            "house_sensor": self.controller._house_humidity_source(),
+            "house_sensors": self.controller.house_humidity_sources(),
+            "house_humidity": self.controller.house_humidity(),
         }
 
 

@@ -4,6 +4,10 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.13.0
+
+- Shower humidity: the house reference can be several humidity sensors, averaged (offline ones are skipped). Leave it empty to keep using the thermostat's humidity. Existing single-sensor setups carry over.
+
 ## 0.12.0
 
 - New **shower humidity ventilation**. Pick a bathroom humidity sensor under Configure → Shower humidity. When the bathroom gets well above the house's humidity, the fan runs at its top speed; once it falls back it drops to low; when it's close to the house again it turns off. Defaults: on at +10, high until +20, off below +5 (humidity points), with high held at least 5 minutes and a 90 minute maximum run. A dead sensor stops it, and a fan switched off by hand mid-shower stays off for that shower.

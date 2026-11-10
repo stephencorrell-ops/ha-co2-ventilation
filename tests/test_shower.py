@@ -371,3 +371,30 @@ async def test_long_cooling_run_counts_without_state_changes(hass: HomeAssistant
     for _ in range(24):  # 12 minutes of half-minute ticks, nothing else changing
         await _advance(hass, freezer, 0.5)
     assert hass.states.get(LAST_COOL).state != "unknown"
+
+
+async def test_house_sensors_averaged(hass: HomeAssistant) -> None:
+    hass.states.async_set("sensor.hall", "30", {"device_class": "humidity"})
+    hass.states.async_set("sensor.bedroom", "36", {"device_class": "humidity"})
+    await _setup(
+        hass, {"bathroom_humidity": BATH, "house_humidity": ["sensor.hall", "sensor.bedroom"]}
+    )
+    # Bathroom 41 vs. the average of 30 and 36 (33): +8, under the 10 to start.
+    assert hass.states.get(DIFF).state == "8.0"
+    assert hass.states.get(DIFF).attributes["house_humidity"] == 33.0
+    assert hass.states.get(FAN).state == "off"
+
+    # One house sensor drops out: the other carries on alone.
+    hass.states.async_set("sensor.bedroom", "unavailable")
+    await hass.async_block_till_done()
+    assert hass.states.get(DIFF).state == "11.0"
+    assert hass.states.get(FAN).state == "on"
+
+
+async def test_house_sensors_all_offline_stops(hass: HomeAssistant) -> None:
+    hass.states.async_set("sensor.hall", "30", {"device_class": "humidity"})
+    await _setup(hass, {"bathroom_humidity": BATH, "house_humidity": ["sensor.hall"]})
+    assert hass.states.get(FAN).state == "on"
+    hass.states.async_set("sensor.hall", "unavailable")
+    await hass.async_block_till_done()
+    assert hass.states.get(DIFF).state == "unknown"

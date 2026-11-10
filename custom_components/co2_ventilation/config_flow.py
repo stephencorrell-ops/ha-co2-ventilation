@@ -96,7 +96,11 @@ def _shower_schema(current: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
             _optional(CONF_BATH_HUMIDITY, current): humidity,
-            _optional(CONF_HOUSE_HUMIDITY, current): humidity,
+            _optional(CONF_HOUSE_HUMIDITY, current): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain="sensor", device_class=SensorDeviceClass.HUMIDITY, multiple=True
+                )
+            ),
             _optional(CONF_EXHAUST_FAN, current): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["switch", "fan", "light", "input_boolean"])
             ),
@@ -106,6 +110,8 @@ def _shower_schema(current: dict[str, Any]) -> vol.Schema:
 
 def _optional(key: str, current: dict[str, Any]) -> vol.Optional:
     value = current.get(key)
+    if key == CONF_HOUSE_HUMIDITY and isinstance(value, str):
+        value = [value]  # saved as a single sensor before 0.13
     return vol.Optional(key, description={"suggested_value": value} if value else None)
 
 

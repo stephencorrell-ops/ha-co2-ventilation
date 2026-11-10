@@ -34,11 +34,11 @@
             "description": "Runs the fan when the bathroom is well above the house's humidity: high when it rises, low as it dries out, off when it's back near the house. The thresholds are adjustable on the device page and the card.",
             "data": {
               "bathroom_humidity": "Bathroom humidity sensor",
-              "house_humidity": "House humidity sensor",
+              "house_humidity": "House humidity sensors",
               "exhaust_fan": "Bathroom exhaust fan"
             },
             "data_description": {
-              "house_humidity": "Leave empty to use the thermostat's humidity sensor.",
+              "house_humidity": "Pick one or more; they're averaged, skipping any that are offline. Leave empty to use the thermostat's humidity.",
               "exhaust_fan": "Optional. Turned on for the shower only if the air conditioning ran in the last week (adjustable), so in heating season the shower's moisture stays in the house."
             }
           }
@@ -80,11 +80,11 @@
             "description": "Runs the fan when the bathroom is well above the house's humidity: high when it rises, low as it dries out, off when it's back near the house. The thresholds are adjustable on the device page and the card.",
             "data": {
               "bathroom_humidity": "Bathroom humidity sensor",
-              "house_humidity": "House humidity sensor",
+              "house_humidity": "House humidity sensors",
               "exhaust_fan": "Bathroom exhaust fan"
             },
             "data_description": {
-              "house_humidity": "Leave empty to use the thermostat's humidity sensor.",
+              "house_humidity": "Pick one or more; they're averaged, skipping any that are offline. Leave empty to use the thermostat's humidity.",
               "exhaust_fan": "Optional. Turned on for the shower only if the air conditioning ran in the last week (adjustable), so in heating season the shower's moisture stays in the house."
             }
           }
