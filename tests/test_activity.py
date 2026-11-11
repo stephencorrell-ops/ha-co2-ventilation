@@ -19,7 +19,7 @@ def _fan(hass: HomeAssistant, on: bool, pct: int = 0) -> None:
     hass.states.async_set(FAN, "on" if on else "off", {"percentage_step": STEP, "percentage": pct if on else 0})
 
 
-async def _setup(hass: HomeAssistant) -> None:
+async def _setup(hass: HomeAssistant, **thermostat_extra: str) -> None:
     async def turn_on(call: ServiceCall) -> None:
         _fan(hass, True, call.data.get("percentage", 100))
 
@@ -45,7 +45,7 @@ async def _setup(hass: HomeAssistant) -> None:
             "co2_sensors": ["sensor.front_room"],
             "fan_entity": FAN,
             "startup_delay": 120,
-            "thermostat": {"climate_entity": NEST, "call_g": G, "call_y": Y, "call_ob": O, "call_w2": W2},
+            "thermostat": {"climate_entity": NEST, "call_g": G, "call_y": Y, "call_ob": O, "call_w2": W2, **thermostat_extra},
         },
         unique_id=FAN,
     )
@@ -138,3 +138,21 @@ async def test_manual_fan(hass: HomeAssistant) -> None:
     assert state == "fan_manual"
     assert a["called_by"] == ["manual"]
     assert a["fan_speed"] == "medium_low"
+
+
+async def test_g_label_defaults_to_none(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await _set(hass, g=True)
+    state, a = _act(hass)
+    assert state == "fan_only"
+    assert a["g_label"] is None
+
+
+async def test_g_label_from_settings(hass: HomeAssistant) -> None:
+    """A humidifier also calls G, so the user names G-only calls."""
+    await _setup(hass, g_label="  Fan/Humidifier ")
+    await _set(hass, g=True)
+    state, a = _act(hass)
+    assert state == "fan_only"
+    assert a["g_label"] == "Fan/Humidifier"
+    assert a["called_by"] == ["thermostat"]

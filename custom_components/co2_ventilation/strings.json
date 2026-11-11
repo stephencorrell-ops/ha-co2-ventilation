@@ -24,6 +24,7 @@
               "temperature_sensor": "Temperature sensor",
               "humidity_sensor": "Humidity sensor",
               "call_g": "Fan call (G)",
+              "g_label": "Name for a fan-only call (G)",
               "call_y": "Compressor call (Y)",
               "call_ob": "Reversing valve (O, on in cooling)",
               "call_w2": "Heat strips (W2/AUX)"
@@ -70,6 +71,7 @@
               "temperature_sensor": "Temperature sensor",
               "humidity_sensor": "Humidity sensor",
               "call_g": "Fan call (G)",
+              "g_label": "Name for a fan-only call (G)",
               "call_y": "Compressor call (Y)",
               "call_ob": "Reversing valve (O, on in cooling)",
               "call_w2": "Heat strips (W2/AUX)"

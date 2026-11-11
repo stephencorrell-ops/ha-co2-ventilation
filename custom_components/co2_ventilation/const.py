@@ -17,6 +17,9 @@ CONF_CALL_G = "call_g"
 CONF_CALL_Y = "call_y"
 CONF_CALL_OB = "call_ob"
 CONF_CALL_W2 = "call_w2"
+# Name shown when only G is on (e.g. "Fan/Humidifier" when a humidifier
+# also calls G). Blank keeps "Fan only".
+CONF_G_LABEL = "g_label"
 # Optional shower humidity section.
 CONF_SHOWER = "shower"
 CONF_BATH_HUMIDITY = "bathroom_humidity"

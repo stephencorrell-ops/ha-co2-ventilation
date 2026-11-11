@@ -42,6 +42,7 @@ from .const import (
     CALLER_MANUAL,
     CALLER_THERMOSTAT,
     CONF_CALL_G,
+    CONF_G_LABEL,
     CONF_CALL_OB,
     CONF_CALL_W2,
     CONF_CALL_Y,
@@ -154,6 +155,12 @@ class Co2VentilationController:
         """Optional thermostat entities (Nest climate, sensors, 24 V call inputs)."""
         section = self._conf(CONF_THERMOSTAT) or {}
         return {key: section.get(key) or None for key in THERMOSTAT_KEYS}
+
+    @property
+    def g_label(self) -> str | None:
+        """Custom name for a G-only call, or None for the default "Fan only"."""
+        label = ((self._conf(CONF_THERMOSTAT) or {}).get(CONF_G_LABEL) or "").strip()
+        return label or None
 
     @property
     def shower_config(self) -> dict[str, Any]:
@@ -466,6 +473,7 @@ class Co2VentilationController:
             "activity": activity,
             "called_by": called_by,
             "thermostat_name": climate_state.name if climate_state else None,
+            "g_label": self.g_label,
             "ventilating": we_did,
             "fan_speed": SPEED_BY_LEVEL.get(level) if level else None,
             "fan_level": level,

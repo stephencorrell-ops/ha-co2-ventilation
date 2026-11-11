@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.13.0";
+const CARD_VERSION = "0.14.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -448,7 +448,7 @@ class Co2VentilationCard extends HTMLElement {
     const hum = callers.includes("humidity");
     const manual = callers.includes("manual");
 
-    let what = ACTIVITY[key].text;
+    let what = key === "fan_only" && a.g_label ? a.g_label : ACTIVITY[key].text;
     if (thermo && (co2 || hum)) what += " + ventilating";
     else if (thermo && manual) what += " + fan on";
     else if (key === "ventilating" && hum && !co2) what = "Clearing shower humidity";
@@ -461,7 +461,7 @@ class Co2VentilationCard extends HTMLElement {
     if (names.length > 1) who = [`Called by ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`, spLabel && `${spLabel} wins`];
     else if (hum) who = ["Called by shower humidity", humTxt, a.shower_mode === "low" ? "drying out" : ""];
     else if (thermo && manual) who = [`Called by ${nest}`, "fan also on by hand"];
-    else if (thermo) who = [key === "fan_only" ? `Called by ${nest} fan` : `Called by ${nest}`, key.includes("aux") ? "aux heat" : ""];
+    else if (thermo) who = [key === "fan_only" ? (a.g_label ? "Fan call on G" : `Called by ${nest} fan`) : `Called by ${nest}`, key.includes("aux") ? "aux heat" : ""];
     else if (co2) who = [`Called by ${co2Txt}`];
     else if (manual) who = ["Turned on by hand", "CO\u2082 won't turn it off"];
     else who = ["Nothing calling", `CO\u2082 under ${Math.round(onSetpoint)} ppm`];
@@ -1071,7 +1071,7 @@ class Co2ThermostatCard extends HTMLElement {
     <div class="stat" id="st_co2"><div class="k">Highest CO₂</div><div class="v" id="v_co2"></div><div class="s" id="s_co2"></div></div>
   </div>
   <div class="bar"><span class="sub" id="rangetxt"></span><span class="seg" id="range">${RANGES.map(([h, l]) => `<button data-h="${h}">${l}</button>`).join("")}</span></div>
-  <div class="legend">${MODES.map((m) => `<span><i style="background:${MODE_COLOR[m]}"></i>${MODE_LABEL[m]}</span>`).join("")}</div>
+  <div class="legend" id="legend">${this._legend()}</div>
   <div class="chart" id="chart"><div id="svg"></div><div class="tip" id="tip"></div></div>
   <div class="totals" id="totals"></div>
   ${e.filter || e.total ? `<div class="run">
@@ -1157,6 +1157,19 @@ class Co2ThermostatCard extends HTMLElement {
     this._renderChart();
   }
 
+  // Name for a G-only call from the integration settings (e.g. "Fan/Humidifier").
+  _gLabel() {
+    return this._hass?.states[this._e?.activity]?.attributes?.g_label || null;
+  }
+
+  _ml(m) {
+    return m === "fan" ? this._gLabel() || MODE_LABEL.fan : MODE_LABEL[m];
+  }
+
+  _legend() {
+    return MODES.map((m) => `<span><i style="background:${MODE_COLOR[m]}"></i>${esc(this._ml(m))}</span>`).join("");
+  }
+
   _update() {
     const e = this._e, hass = this._hass;
     const $ = (id) => this.shadowRoot.getElementById(id);
@@ -1167,7 +1180,7 @@ class Co2ThermostatCard extends HTMLElement {
     const main = modes.filter((m) => m !== "vent");
     const pill = $("pill");
     const defrost = this._on(e.y) && this._on(e.o) && this._on(e.w2);
-    const label = defrost ? "Defrost, heat strips on" : main.length ? main.map((m) => MODE_LABEL[m]).join(" + ") : vent ? MODE_LABEL.vent : "Idle";
+    const label = defrost ? "Defrost, heat strips on" : main.length ? main.map((m) => this._ml(m)).join(" + ") : vent ? MODE_LABEL.vent : "Idle";
     const color = MODE_COLOR[main[0] || (vent ? "vent" : "")];
     pill.textContent = label;
     pill.style.background = color ? `${color}26` : "";
@@ -1184,7 +1197,7 @@ class Co2ThermostatCard extends HTMLElement {
     $("fanicon").title = blower ? "Blower running" : "Blower off";
     const speedTxt = SPEED_LABELS[speed] || "";
     const chips = [
-      [e.g, "G", "Fan"],
+      [e.g, "G", this._gLabel() || "Fan"],
       [e.y, "Y", "Compressor"],
       [e.o, "O", "Cool valve"],
       [e.w2, "W2", "Heat strips"],
@@ -1194,6 +1207,8 @@ class Co2ThermostatCard extends HTMLElement {
       .map(([id, k, n]) => `<span class="chip ${this._on(id) ? "on" : ""}" title="${esc(id)}"><i></i><b>${k}</b> ${esc(n)}</span>`)
       .join("");
     if ($("calls").innerHTML !== chips) $("calls").innerHTML = chips;
+    const legend = this._legend();
+    if ($("legend") && $("legend").innerHTML !== legend) $("legend").innerHTML = legend;
 
     const u = this._tempUnit();
     const temp = this._currentTemp(), hum = this._currentHum(), co2 = this._num(e.highest);
@@ -1312,7 +1327,7 @@ class Co2ThermostatCard extends HTMLElement {
     for (const s of segs) totals[s.m] = (totals[s.m] || 0) + (s.b - s.a);
     const show = ["heat", "strips", "cool", "vent"];
     const tot = this.shadowRoot.getElementById("totals");
-    if (tot) tot.innerHTML = show.map((m) => `<div><div class="n"><i style="background:${MODE_COLOR[m]}"></i>${MODE_LABEL[m]}</div><div class="v">${fmtDur(totals[m] || 0)}</div></div>`).join("");
+    if (tot) tot.innerHTML = show.map((m) => `<div><div class="n"><i style="background:${MODE_COLOR[m]}"></i>${esc(this._ml(m))}</div><div class="v">${fmtDur(totals[m] || 0)}</div></div>`).join("");
   }
 
   _panel(title, pts, y0, ph, color, segs, x, start, end, setSeries, decimals, refs = []) {
@@ -1378,7 +1393,7 @@ class Co2ThermostatCard extends HTMLElement {
       for (const p of arr || []) if (p.t <= t) best = p;
       return best ?? arr?.[0];
     };
-    const modes = (this._segs || []).filter((s) => s.a <= t && s.b > t).map((s) => MODE_LABEL[s.m]);
+    const modes = (this._segs || []).filter((s) => s.a <= t && s.b > t).map((s) => this._ml(s.m));
     const tv = near(this._lines.temp), hv = near(this._lines.hum), cv = near(this._lines.co2);
     const d = new Date(t);
     const when = this._hours > 24 ? d.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });

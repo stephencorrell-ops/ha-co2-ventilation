@@ -20,6 +20,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_CALL_G,
+    CONF_G_LABEL,
     CONF_CALL_OB,
     CONF_CALL_W2,
     CONF_CALL_Y,
@@ -134,6 +135,7 @@ def _thermostat_schema(current: dict[str, Any]) -> vol.Schema:
                 )
             ),
             _optional(CONF_CALL_G, current): call,
+            _optional(CONF_G_LABEL, current): selector.TextSelector(),
             _optional(CONF_CALL_Y, current): call,
             _optional(CONF_CALL_OB, current): call,
             _optional(CONF_CALL_W2, current): call,

@@ -4,6 +4,10 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.14.0
+
+- New setting under Thermostat: **Name for a fan-only call (G)**. If something besides the thermostat calls G (a humidifier, for example), name it here, like `Fan/Humidifier`. Both cards use it for the status, the G chip, the legend and the chart tooltip, and the HVAC activity sensor shows it as `g_label`. Leave it blank to keep "Fan only".
+
 ## 0.13.0
 
 - Shower humidity: the house reference can be several humidity sensors, averaged (offline ones are skipped). Leave it empty to keep using the thermostat's humidity. Existing single-sensor setups carry over.
