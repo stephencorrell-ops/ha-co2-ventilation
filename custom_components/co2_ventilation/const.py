@@ -7,6 +7,10 @@ DOMAIN = "co2_ventilation"
 CONF_CO2_SENSORS = "co2_sensors"
 CONF_FAN_ENTITY = "fan_entity"
 CONF_STARTUP_DELAY = "startup_delay"
+# Optional buttons/remotes whose automations run the fan. A fan turned on
+# within REMOTE_WINDOW_S of a press is shown as turned on by remote.
+CONF_FAN_REMOTES = "fan_remotes"
+REMOTE_WINDOW_S = 30
 
 # Optional thermostat monitoring, set under a collapsible "Thermostat" section.
 CONF_THERMOSTAT = "thermostat"
@@ -70,6 +74,7 @@ ACTIVITY_DEFROST = "defrost"
 ACTIVITY_FAN_ONLY = "fan_only"
 ACTIVITY_VENTILATING = "ventilating"
 ACTIVITY_FAN_MANUAL = "fan_manual"
+ACTIVITY_FAN_REMOTE = "fan_remote"
 ACTIVITIES = [
     ACTIVITY_IDLE,
     ACTIVITY_HEAT_PUMP,
@@ -80,10 +85,18 @@ ACTIVITIES = [
     ACTIVITY_FAN_ONLY,
     ACTIVITY_VENTILATING,
     ACTIVITY_FAN_MANUAL,
+    ACTIVITY_FAN_REMOTE,
 ]
 CALLER_THERMOSTAT = "thermostat"
 CALLER_CO2 = "co2"
 CALLER_MANUAL = "manual"
+CALLER_REMOTE = "remote"
+# Who turned the fan on, for the Fan turned on by sensor (and its history,
+# which the thermostat card uses to split CO2 runs from remote ones).
+FAN_CALLER_OFF = "off"
+FAN_CALLER_CO2 = "co2"
+FAN_CALLER_SHOWER = "shower"
+FAN_CALLERS = [FAN_CALLER_OFF, FAN_CALLER_CO2, FAN_CALLER_SHOWER, CALLER_REMOTE, CALLER_MANUAL]
 # Blower speed (tap) for each thermostat call, as wired at the air handler:
 # G and Y run medium (tap 3), the heat strips (W2) run high (tap 5).
 THERMOSTAT_CALL_LEVEL = 3

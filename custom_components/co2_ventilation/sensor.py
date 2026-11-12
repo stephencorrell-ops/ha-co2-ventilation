@@ -23,7 +23,7 @@ except ImportError:  # Home Assistant before 2025.2
     )
 
 from . import Co2VentilationConfigEntry
-from .const import ACTIVITIES, CONF_CLIMATE, STATUSES, THERMOSTAT_KEYS
+from .const import ACTIVITIES, CONF_CLIMATE, FAN_CALLERS, STATUSES, THERMOSTAT_KEYS
 from .entity import Co2VentilationEntity
 
 
@@ -38,6 +38,7 @@ async def async_setup_entry(
             HighestCo2Sensor(controller, "highest_co2"),
             StatusSensor(controller, "status"),
             HvacActivitySensor(controller, "hvac_activity"),
+            FanCallerSensor(controller, "fan_caller"),
             *(
                 [ShowerHumiditySensor(controller, "shower_humidity_diff")]
                 if controller.shower_configured
@@ -187,6 +188,7 @@ class HvacActivitySensor(Co2VentilationEntity, SensorEntity):
             "fan_only": "mdi:fan",
             "ventilating": "mdi:molecule-co2",
             "fan_manual": "mdi:fan",
+            "fan_remote": "mdi:remote",
         }.get(self.native_value, "mdi:hvac")
 
     @property
@@ -194,6 +196,44 @@ class HvacActivitySensor(Co2VentilationEntity, SensorEntity):
         info = self.controller.hvac_activity()
         info.pop("activity")
         return info
+
+
+class FanCallerSensor(Co2VentilationEntity, SensorEntity):
+    """Who has the fan on: CO2, shower humidity, a remote, by hand, or off.
+
+    Its history lets the thermostat card tell CO2 runs from remote ones.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = FAN_CALLERS
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.controller.fan_entity:
+
+            @callback
+            def _changed(_event) -> None:
+                self.async_write_ha_state()
+
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, [self.controller.fan_entity], _changed
+                )
+            )
+
+    @property
+    def native_value(self) -> str:
+        return self.controller.fan_caller()
+
+    @property
+    def icon(self) -> str:
+        return {
+            "off": "mdi:fan-off",
+            "co2": "mdi:molecule-co2",
+            "shower": "mdi:shower-head",
+            "remote": "mdi:remote",
+            "manual": "mdi:gesture-tap",
+        }.get(self.native_value, "mdi:fan")
 
 
 class ShowerHumiditySensor(Co2VentilationEntity, SensorEntity):

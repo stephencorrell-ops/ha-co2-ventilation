@@ -33,6 +33,7 @@ To change sensors, the fan, or the startup delay later, use **Configure** on the
 
 - Sensors that are `unavailable` or `unknown` are skipped, which helps with Bluetooth sensors that miss a reading now and then.
 - If you turn the fan on by hand, it stays on until you turn it off. If CO2 crosses the on setpoint while it's running, auto ventilation takes over and will shut it off when the air is clear.
+- **Fan remotes** (optional, under Configure): pick the buttons or remotes whose automations run the fan. When the fan comes on within 30 seconds of a press, the cards and sensors show it as turned on by remote instead of by hand. Otherwise it's treated like by hand: it stays on until you turn it off.
 - Turning **Auto ventilation** off leaves the fan exactly as it is.
 
 ## Ventilation speed
@@ -55,7 +56,8 @@ With the default name, the entity IDs are:
 | `sensor.co2_ventilation_fan_runtime_total` | Lifetime blower hours (never resets) |
 | `button.co2_ventilation_reset_filter_runtime` | Press after changing the filter; also sets the date below to today |
 | `date.co2_ventilation_last_filter_change` | When the filter was last changed; set it by hand for an earlier change |
-| `sensor.co2_ventilation_hvac_activity` | What the HVAC is doing: Idle, Heat pump heating, Heat pump + heat strips, Heat strips, Cooling, Defrost, Fan only, CO2 ventilating, Fan on by hand. Attributes say who called for it (`called_by`: thermostat, co2, manual), the thermostat's name, and the speed the blower is actually running (`fan_speed`) |
+| `sensor.co2_ventilation_hvac_activity` | What the HVAC is doing: Idle, Heat pump heating, Heat pump + heat strips, Heat strips, Cooling, Defrost, Fan only, CO2 ventilating, Fan on by hand, Fan on by remote. Attributes say who called for it (`called_by`: thermostat, co2, humidity, remote, manual), the thermostat's name, and the speed the blower is actually running (`fan_speed`) |
+| `sensor.co2_ventilation_fan_turned_on_by` | Who has the fan on: Off, CO2, Shower humidity, Remote, By hand. Its history splits CO2 runs from remote ones on the thermostat card |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
 
 ## Shower humidity

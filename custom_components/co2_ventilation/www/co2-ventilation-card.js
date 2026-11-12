@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.14.0";
+const CARD_VERSION = "0.15.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -32,6 +32,7 @@ const ACTIVITY = {
   fan_only: { text: "Fan only", color: "#888780" },
   ventilating: { text: "Ventilating", color: "#1baf7a" },
   fan_manual: { text: "Fan on", color: "#6250d6" },
+  fan_remote: { text: "Fan on", color: "#6250d6" },
 };
 const SPIN_CSS = `
   @keyframes co2spin { to { transform: rotate(360deg); } }
@@ -446,7 +447,9 @@ class Co2VentilationCard extends HTMLElement {
     const thermo = callers.includes("thermostat");
     const co2 = callers.includes("co2");
     const hum = callers.includes("humidity");
-    const manual = callers.includes("manual");
+    const remote = callers.includes("remote");
+    const manual = callers.includes("manual") || remote;
+    const how = remote ? "by remote" : "by hand";
 
     let what = key === "fan_only" && a.g_label ? a.g_label : ACTIVITY[key].text;
     if (thermo && (co2 || hum)) what += " + ventilating";
@@ -460,10 +463,10 @@ class Co2VentilationCard extends HTMLElement {
     const names = [thermo && nest, co2 && "CO\u2082", hum && "shower humidity"].filter(Boolean);
     if (names.length > 1) who = [`Called by ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`, spLabel && `${spLabel} wins`];
     else if (hum) who = ["Called by shower humidity", humTxt, a.shower_mode === "low" ? "drying out" : ""];
-    else if (thermo && manual) who = [`Called by ${nest}`, "fan also on by hand"];
+    else if (thermo && manual) who = [`Called by ${nest}`, `fan also on ${how}`];
     else if (thermo) who = [key === "fan_only" ? (a.g_label ? "Fan call on G" : `Called by ${nest} fan`) : `Called by ${nest}`, key.includes("aux") ? "aux heat" : ""];
     else if (co2) who = [`Called by ${co2Txt}`];
-    else if (manual) who = ["Turned on by hand", "CO\u2082 won't turn it off"];
+    else if (manual) who = [`Turned on ${how}`, "CO\u2082 won't turn it off"];
     else who = ["Nothing calling", `CO\u2082 under ${Math.round(onSetpoint)} ppm`];
     const whoTxt = who.filter(Boolean).join(" \u00b7 ");
 
@@ -753,20 +756,29 @@ if (!customElements.get("co2-ventilation-card")) {
 // Thermostat history card
 // ======================================================================
 
-const MODES = ["heat", "strips", "cool", "fan", "vent"];
-const MODE_COLOR = { heat: "#eb6834", strips: "#e34948", cool: "#2a78d6", fan: "#888780", vent: "#1baf7a" };
-const MODE_LABEL = { heat: "Heat pump", strips: "Heat strips", cool: "Cooling", fan: "Fan only", vent: "CO₂ ventilation" };
-const MODE_LANE = { heat: "Heat", strips: "Strips", cool: "Cool", fan: "Fan", vent: "Vent" };
+// Chart lanes. The ventilation fan is split by who turned it on: CO2 or
+// shower humidity ("vent"), a remote, or by hand. Remote and by-hand runs
+// share the Remote lane.
+const MODES = ["heat", "strips", "cool", "fan", "vent", "remote"];
+const MODE_COLOR = { heat: "#eb6834", strips: "#e34948", cool: "#2a78d6", fan: "#888780", vent: "#1baf7a", remote: "#6250d6", hand: "#6250d6" };
+const MODE_LABEL = { heat: "Heat pump", strips: "Heat strips", cool: "Cooling", fan: "Fan only", vent: "CO₂ ventilation", remote: "Fan on by remote", hand: "Fan on by hand" };
+const MODE_LANE = { heat: "Heat", strips: "Strips", cool: "Cool", fan: "Fan", vent: "Vent", remote: "Remote" };
+const laneOf = (m) => (m === "hand" ? "remote" : m);
+// Which lane a running ventilation fan goes in, from the Fan turned on by
+// sensor (or, before it existed, the status sensor's "manual").
+const ventKind = (caller, status) =>
+  caller === "remote" ? "remote" : caller === "manual" ? "hand" : caller ? "vent" : status === "manual" ? "hand" : "vent";
 
 // Decide what the system is doing from the 24 V calls (O is on in cooling).
 // Y + O + W2 is a defrost cycle (heat pump reversed, strips on), not cooling.
+// vent is false when the ventilation fan is off, otherwise its lane key.
 const modesFrom = (g, y, o, w2, vent) => {
   const m = [];
   if (y && !o) m.push("heat");
   if (y && o && !w2) m.push("cool");
   if (w2) m.push("strips");
   if (g && !y && !w2) m.push("fan");
-  if (vent) m.push("vent");
+  if (vent) m.push(vent === true ? "vent" : vent);
   return m;
 };
 
@@ -853,6 +865,7 @@ class Co2ThermostatCard extends HTMLElement {
       highest: byKey("highest_co2"),
       speed: byKey("speed"),
       activity: byKey("hvac_activity"),
+      caller: byKey("fan_caller"),
       on: byKey("on_setpoint"),
       off: byKey("off_setpoint"),
       filter: byKey("filter_runtime"),
@@ -922,7 +935,7 @@ class Co2ThermostatCard extends HTMLElement {
     this._e = e;
     const end = new Date();
     const start = new Date(end.getTime() - this._hours * 3600 * 1000);
-    const plain = [e.g, e.y, e.o, e.w2, e.vent, e.temp, e.hum, e.highest].filter(Boolean);
+    const plain = [e.g, e.y, e.o, e.w2, e.vent, e.caller, e.status, e.temp, e.hum, e.highest].filter(Boolean);
     const ws = (ids, attrs) =>
       this._hass.callWS({
         type: "history/history_during_period",
@@ -971,15 +984,24 @@ class Co2ThermostatCard extends HTMLElement {
   _segments() {
     const h = this._history, e = this._e;
     if (!h?.data) return [];
-    const ids = { g: e.g, y: e.y, o: e.o, w2: e.w2, vent: e.vent };
+    const ids = { g: e.g, y: e.y, o: e.o, w2: e.w2, vent: e.vent, caller: e.caller, status: e.status };
     const times = new Set([h.start, h.end]);
     for (const id of Object.values(ids)) for (const p of h.data[id] || []) if (p.t > h.start && p.t < h.end) times.add(p.t);
     const ts = [...times].sort((a, b) => a - b);
     const segs = [];
     const isOn = (id, t) => !!id && this._at(h.data[id], t)?.s === "on";
+    // State at t, but only if it was recorded by then (no back-filling from
+    // the first row, so runs before the caller sensor existed fall back).
+    const stateAt = (id, t) => {
+      const pts = id && h.data[id];
+      if (!pts?.length || pts[0].t > t) return null;
+      const s = this._at(pts, t)?.s;
+      return s === "unknown" || s === "unavailable" ? null : s;
+    };
     for (let i = 0; i < ts.length - 1; i++) {
       const a = ts[i], b = ts[i + 1], mid = a + 1;
-      const modes = modesFrom(isOn(e.g, mid), isOn(e.y, mid), isOn(e.o, mid), isOn(e.w2, mid), isOn(e.vent, mid));
+      const vent = isOn(e.vent, mid) && ventKind(stateAt(e.caller, mid), stateAt(e.status, mid));
+      const modes = modesFrom(isOn(e.g, mid), isOn(e.y, mid), isOn(e.o, mid), isOn(e.w2, mid), vent);
       for (const m of modes) {
         const last = segs.findLast?.((s) => s.m === m) ?? [...segs].reverse().find((s) => s.m === m);
         if (last && last.b === a) last.b = b;
@@ -1037,7 +1059,7 @@ class Co2ThermostatCard extends HTMLElement {
   .chart { position:relative; touch-action:pan-y; }
   .tip { position:absolute; top:0; pointer-events:none; background:var(--card-background-color); border:1px solid var(--divider-color); border-radius:8px; padding:6px 9px; font-size:12px; color:var(--secondary-text-color); line-height:1.5; white-space:nowrap; display:none; }
   .tip b { color:var(--primary-text-color); font-weight:500; }
-  .totals { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; border-top:1px solid var(--divider-color); padding-top:10px; margin-top:4px; }
+  .totals { display:grid; grid-template-columns:repeat(var(--cols, 4),minmax(0,1fr)); gap:8px; border-top:1px solid var(--divider-color); padding-top:10px; margin-top:4px; }
   .totals div { font-size:12px; color:var(--secondary-text-color); min-width:0; }
   .totals .n { display:flex; align-items:center; gap:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .totals .n i { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
@@ -1167,7 +1189,14 @@ class Co2ThermostatCard extends HTMLElement {
   }
 
   _legend() {
-    return MODES.map((m) => `<span><i style="background:${MODE_COLOR[m]}"></i>${esc(this._ml(m))}</span>`).join("");
+    return MODES.map((m) => `<span><i style="background:${MODE_COLOR[m]}"></i>${esc(m === "remote" ? "Remote or by hand" : this._ml(m))}</span>`).join("");
+  }
+
+  // Lane key for the ventilation fan right now, or false if it's off.
+  _ventNow() {
+    const e = this._e;
+    if (!this._on(e.vent)) return false;
+    return ventKind(this._hass.states[e.caller]?.state, this._hass.states[e.status]?.state);
   }
 
   _update() {
@@ -1175,13 +1204,15 @@ class Co2ThermostatCard extends HTMLElement {
     const $ = (id) => this.shadowRoot.getElementById(id);
     if (!$("pill")) return;
 
-    const vent = this._on(e.vent);
-    const modes = modesFrom(this._on(e.g), this._on(e.y), this._on(e.o), this._on(e.w2), vent);
-    const main = modes.filter((m) => m !== "vent");
+    const ventKey = this._ventNow();
+    const vent = !!ventKey;
+    const modes = modesFrom(this._on(e.g), this._on(e.y), this._on(e.o), this._on(e.w2), ventKey);
+    const main = modes.filter((m) => m !== ventKey);
     const pill = $("pill");
     const defrost = this._on(e.y) && this._on(e.o) && this._on(e.w2);
-    const label = defrost ? "Defrost, heat strips on" : main.length ? main.map((m) => this._ml(m)).join(" + ") : vent ? MODE_LABEL.vent : "Idle";
-    const color = MODE_COLOR[main[0] || (vent ? "vent" : "")];
+    const extra = ventKey && ventKey !== "vent" ? ` + ${ventKey === "remote" ? "remote" : "fan by hand"}` : "";
+    const label = defrost ? "Defrost, heat strips on" : main.length ? main.map((m) => this._ml(m)).join(" + ") + extra : vent ? MODE_LABEL[ventKey] : "Idle";
+    const color = MODE_COLOR[main[0] || ventKey || ""];
     pill.textContent = label;
     pill.style.background = color ? `${color}26` : "";
     pill.style.color = color ? "var(--primary-text-color)" : "";
@@ -1201,7 +1232,7 @@ class Co2ThermostatCard extends HTMLElement {
       [e.y, "Y", "Compressor"],
       [e.o, "O", "Cool valve"],
       [e.w2, "W2", "Heat strips"],
-      [e.vent, "Vent", speedTxt || "CO₂ fan"],
+      [e.vent, "Vent", ventKey === "remote" ? "Remote" : ventKey === "hand" ? "By hand" : speedTxt || "CO₂ fan"],
     ]
       .filter(([id]) => id)
       .map(([id, k, n]) => `<span class="chip ${this._on(id) ? "on" : ""}" title="${esc(id)}"><i></i><b>${k}</b> ${esc(n)}</span>`)
@@ -1282,7 +1313,9 @@ class Co2ThermostatCard extends HTMLElement {
       co2: nowAdd(co2, this._num(e.highest)),
     };
 
-    let svg = `<svg viewBox="0 0 ${W} 430" width="100%" role="img" aria-label="Thermostat activity over the last ${this._hours} hours, with temperature, humidity and CO2 below on the same time axis">`;
+    // Six 13-px activity lanes, then the three panels and the time axis.
+    const P = 13; // shift below the sixth (Remote) lane
+    let svg = `<svg viewBox="0 0 ${W} ${430 + P}" width="100%" role="img" aria-label="Thermostat activity over the last ${this._hours} hours, with temperature, humidity and CO2 below on the same time axis">`;
 
     // Activity lanes
     svg += `<text x="${L}" y="11">Activity</text>`;
@@ -1290,7 +1323,7 @@ class Co2ThermostatCard extends HTMLElement {
       const y0 = 18 + i * 13;
       svg += `<text x="${L - 6}" y="${y0 + 9}" text-anchor="end">${MODE_LANE[m]}</text>`;
       svg += `<rect x="${L}" y="${y0 + 1}" width="${W - L - R}" height="10" rx="2" fill="var(--divider-color)" opacity=".45"/>`;
-      for (const s of segs) if (s.m === m) svg += `<rect x="${x(s.a).toFixed(1)}" y="${y0 + 1}" width="${Math.max(1.5, x(s.b) - x(s.a)).toFixed(1)}" height="10" rx="2" fill="${MODE_COLOR[m]}"/>`;
+      for (const s of segs) if (laneOf(s.m) === m) svg += `<rect x="${x(s.a).toFixed(1)}" y="${y0 + 1}" width="${Math.max(1.5, x(s.b) - x(s.a)).toFixed(1)}" height="10" rx="2" fill="${MODE_COLOR[m]}"/>`;
     });
 
     const u = this._tempUnit();
@@ -1299,40 +1332,47 @@ class Co2ThermostatCard extends HTMLElement {
     const setSeries = [];
     if (setLo.length && setHi.length) setSeries.push([setLo, "#eb6834"], [setHi, "#2a78d6"]);
     else if (setOne.length) setSeries.push([setOne, "#888780"]);
-    svg += this._panel(`Temperature (${u})`, this._lines.temp, 106, 72, "#eb6834", segs, x, start, end, setSeries, 1);
-    svg += this._panel("Humidity (%)", this._lines.hum, 204, 60, "#2a78d6", segs, x, start, end, [], 0);
+    svg += this._panel(`Temperature (${u})`, this._lines.temp, 106 + P, 72, "#eb6834", segs, x, start, end, setSeries, 1);
+    svg += this._panel("Humidity (%)", this._lines.hum, 204 + P, 60, "#2a78d6", segs, x, start, end, [], 0);
     if (on != null) setRefs.push([on, "#d03b3b", `On ${Math.round(on)}`]);
     if (off != null) setRefs.push([off, "#0ca30c", `Off ${Math.round(off)}`]);
-    svg += this._panel("Highest CO₂ (ppm)", this._lines.co2, 290, 92, "#1baf7a", segs, x, start, end, [], 0, setRefs);
+    svg += this._panel("Highest CO₂ (ppm)", this._lines.co2, 290 + P, 92, "#1baf7a", segs, x, start, end, [], 0, setRefs);
 
-    // Time axis
-    const span = end - start;
+    // Time axis: every hour (6 h), every 4 hours on the clock (24 h), or
+    // each midnight (7 d). Walk hour by hour so the 4-hour marks land on
+    // 12, 4, 8... whatever hour it is now (and stay right across DST).
     const stepH = this._hours <= 6 ? 1 : this._hours <= 24 ? 4 : 24;
+    const axisY = 410 + P;
     const first = new Date(start);
     first.setMinutes(0, 0, 0);
-    if (stepH === 24) first.setHours(0);
-    for (let t = first.getTime() + stepH * 3600000; t < end - span * 0.04; t += stepH * 3600000) {
+    for (let t = first.getTime() + 3600000; t < end; t += 3600000) {
       const d = new Date(t);
-      if (stepH === 4 && d.getHours() % 4) continue;
+      if (d.getMinutes() || d.getHours() % stepH) continue;
+      const px = x(t);
+      // Skip labels that would be cut off at the left edge or run into "Now".
+      if (px < L + 14 || px > W - R - 40) continue;
       const lbl = stepH === 24 ? d.toLocaleDateString([], { weekday: "short" }) : d.getHours() === 0 ? d.toLocaleDateString([], { month: "short", day: "numeric" }) : d.toLocaleTimeString([], { hour: "numeric" });
-      svg += `<text x="${x(t).toFixed(1)}" y="410" text-anchor="middle">${esc(lbl)}</text>`;
+      svg += `<line x1="${px.toFixed(1)}" x2="${px.toFixed(1)}" y1="${axisY - 15}" y2="${axisY - 11}" stroke="var(--divider-color)" stroke-width="1"/>`;
+      svg += `<text x="${px.toFixed(1)}" y="${axisY}" text-anchor="middle">${esc(lbl)}</text>`;
     }
-    svg += `<text x="${W - R}" y="410" text-anchor="end">Now</text>`;
-    svg += `<line id="cross" x1="0" x2="0" y1="18" y2="384" stroke="var(--secondary-text-color)" stroke-width="1" stroke-dasharray="2 3" visibility="hidden"/>`;
+    svg += `<text x="${W - R}" y="${axisY}" text-anchor="end">Now</text>`;
+    svg += `<line id="cross" x1="0" x2="0" y1="18" y2="${384 + P}" stroke="var(--secondary-text-color)" stroke-width="1" stroke-dasharray="2 3" visibility="hidden"/>`;
     svg += `</svg>`;
     box.innerHTML = svg;
 
     // Runtime totals for the window
     const totals = {};
-    for (const s of segs) totals[s.m] = (totals[s.m] || 0) + (s.b - s.a);
-    const show = ["heat", "strips", "cool", "vent"];
+    for (const s of segs) totals[laneOf(s.m)] = (totals[laneOf(s.m)] || 0) + (s.b - s.a);
+    // Remote shows only when it ran in this window, to keep the row short.
+    const show = ["heat", "strips", "cool", "vent", ...(totals.remote ? ["remote"] : [])];
     const tot = this.shadowRoot.getElementById("totals");
-    if (tot) tot.innerHTML = show.map((m) => `<div><div class="n"><i style="background:${MODE_COLOR[m]}"></i>${esc(this._ml(m))}</div><div class="v">${fmtDur(totals[m] || 0)}</div></div>`).join("");
+    if (tot) tot.style.setProperty("--cols", show.length);
+    if (tot) tot.innerHTML = show.map((m) => `<div><div class="n"><i style="background:${MODE_COLOR[m]}"></i>${esc(m === "remote" ? "Remote / by hand" : this._ml(m))}</div><div class="v">${fmtDur(totals[m] || 0)}</div></div>`).join("");
   }
 
   _panel(title, pts, y0, ph, color, segs, x, start, end, setSeries, decimals, refs = []) {
     let s = `<text x="${this._geom.L}" y="${y0 - 5}">${title}</text>`;
-    for (const sg of segs) if (sg.m !== "fan") s += `<rect x="${x(sg.a).toFixed(1)}" y="${y0}" width="${Math.max(1, x(sg.b) - x(sg.a)).toFixed(1)}" height="${ph}" fill="${MODE_COLOR[sg.m]}" opacity="${sg.m === "vent" ? 0.1 : 0.13}"/>`;
+    for (const sg of segs) if (sg.m !== "fan") s += `<rect x="${x(sg.a).toFixed(1)}" y="${y0}" width="${Math.max(1, x(sg.b) - x(sg.a)).toFixed(1)}" height="${ph}" fill="${MODE_COLOR[sg.m]}" opacity="${["vent", "remote", "hand"].includes(sg.m) ? 0.1 : 0.13}"/>`;
     const vals = [...pts.map((p) => p.v), ...setSeries.flatMap(([a]) => a.map((p) => p.v)), ...refs.map(([v]) => v)];
     if (!pts.length) {
       s += `<rect x="${this._geom.L}" y="${y0}" width="${640 - this._geom.L - this._geom.R}" height="${ph}" fill="none" stroke="var(--divider-color)"/>`;
@@ -1403,7 +1443,7 @@ class Co2ThermostatCard extends HTMLElement {
     const left = px * scale;
     const w = tip.offsetWidth;
     tip.style.left = `${left + 10 + w > rect.width ? left - w - 10 : left + 10}px`;
-    tip.style.top = `${106 * scale}px`;
+    tip.style.top = `${119 * scale}px`;
   }
 
   _hideTip() {

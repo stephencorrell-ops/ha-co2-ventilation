@@ -32,6 +32,7 @@ from .const import (
     ACTIVITY_DEFROST,
     ACTIVITY_FAN_MANUAL,
     ACTIVITY_FAN_ONLY,
+    ACTIVITY_FAN_REMOTE,
     ACTIVITY_HEAT_PUMP,
     ACTIVITY_HEAT_PUMP_AUX,
     ACTIVITY_IDLE,
@@ -40,6 +41,7 @@ from .const import (
     CALLER_CO2,
     CALLER_HUMIDITY,
     CALLER_MANUAL,
+    CALLER_REMOTE,
     CALLER_THERMOSTAT,
     CONF_CALL_G,
     CONF_G_LABEL,
@@ -54,6 +56,7 @@ from .const import (
     CONF_SHOWER,
     CONF_CO2_SENSORS,
     CONF_FAN_ENTITY,
+    CONF_FAN_REMOTES,
     CONF_STARTUP_DELAY,
     CONF_THERMOSTAT,
     DEFAULT_MIN_RUN,
@@ -61,6 +64,10 @@ from .const import (
     DEFAULT_ON_SETPOINT,
     DEFAULT_SPEED,
     DEFAULT_STARTUP_DELAY,
+    FAN_CALLER_CO2,
+    FAN_CALLER_OFF,
+    FAN_CALLER_SHOWER,
+    REMOTE_WINDOW_S,
     SPEED_BY_LEVEL,
     SPEED_LEVEL,
     THERMOSTAT_CALL_LEVEL,
@@ -121,6 +128,9 @@ class Co2VentilationController:
         # back on for this shower.
         self._hum_suppressed = False
         self._target_level: int | None = None
+        # A fan not turned on by this controller: was it a remote press?
+        self._remote_on = False
+        self._last_remote_press: datetime | None = None
         self._exhaust_requested = False
         self.shower = ShowerHumidity()
         # When the air conditioning last ran (gates the bathroom exhaust fan).
@@ -145,6 +155,11 @@ class Co2VentilationController:
     @property
     def fan_entity(self) -> str:
         return self._conf(CONF_FAN_ENTITY)
+
+    @property
+    def remotes(self) -> list[str]:
+        """Buttons/remotes whose automations run the fan (optional)."""
+        return [e for e in (self._conf(CONF_FAN_REMOTES) or []) if e]
 
     @property
     def startup_delay(self) -> float:
@@ -246,7 +261,7 @@ class Co2VentilationController:
 
     async def async_start(self) -> None:
         """Start tracking. Call after the entities have restored their state."""
-        watched = [*self.sensors, self.fan_entity]
+        watched = [*self.sensors, self.fan_entity, *self.remotes]
         if self.shower_configured:
             watched += [self.shower_config[CONF_BATH_HUMIDITY], *self.house_humidity_sources()]
             if self.shower_config[CONF_EXHAUST_FAN]:
@@ -332,12 +347,32 @@ class Co2VentilationController:
         new_state = event.data["new_state"]
         old_state = event.data["old_state"]
 
+        if entity_id in self.remotes and entity_id != self.fan_entity:
+            if self._is_press(old_state, new_state):
+                now = dt_util.utcnow()
+                self._last_remote_press = now
+                # The press can land just after the fan turned on.
+                if (
+                    self._fan_is_on()
+                    and not self._we_turned_on
+                    and self._on_since is not None
+                    and (now - self._on_since).total_seconds() <= REMOTE_WINDOW_S
+                ):
+                    self._remote_on = True
+            if entity_id not in self.sensors:
+                self.evaluate()
+                return
+
         if entity_id == self.fan_entity:
             was_on = old_state is not None and old_state.state == STATE_ON
             is_on = new_state is not None and new_state.state == STATE_ON
             if is_on and not was_on:
                 self._on_since = new_state.last_changed
+                self._remote_on = not self._we_turned_on and self._recent_press(
+                    new_state.last_changed
+                )
             elif was_on and not is_on:
+                self._remote_on = False
                 if self.shower.active:
                     # Turned off during a shower: leave it off for this shower.
                     self._hum_suppressed = True
@@ -349,6 +384,32 @@ class Co2VentilationController:
                 self._cancel_pending_off()
 
         self.evaluate()
+
+    @staticmethod
+    def _is_press(old_state: Any, new_state: Any) -> bool:
+        """A real change on a remote, not it dropping off or coming back."""
+        bad = (STATE_UNKNOWN, STATE_UNAVAILABLE)
+        if new_state is None or old_state is None:
+            return False
+        if new_state.state in bad or old_state.state == STATE_UNAVAILABLE:
+            return False
+        return new_state.state != old_state.state
+
+    def _recent_press(self, when: datetime | None) -> bool:
+        if self._last_remote_press is None:
+            return False
+        when = when or dt_util.utcnow()
+        return abs((when - self._last_remote_press).total_seconds()) <= REMOTE_WINDOW_S
+
+    def fan_caller(self) -> str:
+        """Who has the fan on: CO2, shower, a remote, by hand, or off."""
+        if not self._fan_is_on():
+            return FAN_CALLER_OFF
+        if self._we_turned_on:
+            if self._hum_driving and not self._co2_on:
+                return FAN_CALLER_SHOWER
+            return FAN_CALLER_CO2
+        return CALLER_REMOTE if self._remote_on else CALLER_MANUAL
 
     @callback
     def _recompute(self) -> None:
@@ -438,7 +499,12 @@ class Co2VentilationController:
         elif g:
             activity = ACTIVITY_FAN_ONLY
         elif fan_on:
-            activity = ACTIVITY_VENTILATING if we_did else ACTIVITY_FAN_MANUAL
+            if we_did:
+                activity = ACTIVITY_VENTILATING
+            elif self._remote_on:
+                activity = ACTIVITY_FAN_REMOTE
+            else:
+                activity = ACTIVITY_FAN_MANUAL
         else:
             activity = ACTIVITY_IDLE
 
@@ -447,7 +513,7 @@ class Co2VentilationController:
             called_by.append(CALLER_THERMOSTAT)
         if fan_on:
             if not we_did:
-                called_by.append(CALLER_MANUAL)
+                called_by.append(CALLER_REMOTE if self._remote_on else CALLER_MANUAL)
             else:
                 if self._co2_on or not self._hum_driving:
                     called_by.append(CALLER_CO2)

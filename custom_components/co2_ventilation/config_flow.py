@@ -27,6 +27,7 @@ from .const import (
     CONF_CLIMATE,
     CONF_CO2_SENSORS,
     CONF_FAN_ENTITY,
+    CONF_FAN_REMOTES,
     CONF_BATH_HUMIDITY,
     CONF_EXHAUST_FAN,
     CONF_HOUSE_HUMIDITY,
@@ -63,6 +64,9 @@ def _schema(defaults: dict[str, Any], include_name: bool) -> vol.Schema:
     )
     fields[fan_key] = selector.EntitySelector(
         selector.EntitySelectorConfig(domain=["switch", "fan", "input_boolean"])
+    )
+    fields[_optional(CONF_FAN_REMOTES, defaults)] = selector.EntitySelector(
+        selector.EntitySelectorConfig(multiple=True)
     )
     fields[
         vol.Required(

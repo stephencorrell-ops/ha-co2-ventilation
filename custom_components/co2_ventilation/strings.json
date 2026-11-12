@@ -8,12 +8,14 @@
           "name": "Name",
           "co2_sensors": "CO2 sensors",
           "fan_entity": "Fan to control",
+          "fan_remotes": "Fan remotes (optional)",
           "startup_delay": "Startup delay"
         },
         "data_description": {
           "co2_sensors": "The fan turns on when any of these reaches the on setpoint, and off once all are below the off setpoint.",
           "fan_entity": "A switch, fan, or input boolean. With a multi-speed fan, the CO2 routine runs it at the Ventilation speed you pick (low by default).",
-          "startup_delay": "After Home Assistant restarts, wait this long for sensors to report, then turn the fan off unless CO2 is already above the on setpoint."
+          "startup_delay": "After Home Assistant restarts, wait this long for sensors to report, then turn the fan off unless CO2 is already above the on setpoint.",
+          "fan_remotes": "Buttons or remotes whose automations turn the fan on. When the fan comes on within 30 seconds of a press, the cards show it as turned on by remote instead of by hand."
         },
         "sections": {
           "thermostat": {
@@ -60,6 +62,7 @@
         "data": {
           "co2_sensors": "CO2 sensors",
           "fan_entity": "Fan to control",
+          "fan_remotes": "Fan remotes (optional)",
           "startup_delay": "Startup delay"
         },
         "sections": {
@@ -90,6 +93,9 @@
               "exhaust_fan": "Optional. Turned on for the shower only if the air conditioning ran in the last week (adjustable), so in heating season the shower's moisture stays in the house."
             }
           }
+        },
+        "data_description": {
+          "fan_remotes": "Buttons or remotes whose automations turn the fan on. When the fan comes on within 30 seconds of a press, the cards show it as turned on by remote instead of by hand."
         }
       }
     },
@@ -99,33 +105,64 @@
   },
   "entity": {
     "number": {
-      "on_setpoint": { "name": "Fan on at" },
-      "off_setpoint": { "name": "Fan off at" },
-      "min_run": { "name": "Minimum run time" },
-      "shower_on_delta": { "name": "Shower on above house" },
-      "shower_high_until": { "name": "Shower high until" },
-      "shower_off_delta": { "name": "Shower off below" },
-      "shower_max_run_minutes": { "name": "Shower maximum run" },
-      "shower_exhaust_cooling_days": { "name": "Exhaust fan cooling window" }
+      "on_setpoint": {
+        "name": "Fan on at"
+      },
+      "off_setpoint": {
+        "name": "Fan off at"
+      },
+      "min_run": {
+        "name": "Minimum run time"
+      },
+      "shower_on_delta": {
+        "name": "Shower on above house"
+      },
+      "shower_high_until": {
+        "name": "Shower high until"
+      },
+      "shower_off_delta": {
+        "name": "Shower off below"
+      },
+      "shower_max_run_minutes": {
+        "name": "Shower maximum run"
+      },
+      "shower_exhaust_cooling_days": {
+        "name": "Exhaust fan cooling window"
+      }
     },
     "select": {
       "speed": {
         "name": "Ventilation speed",
-        "state": { "low": "Low", "medium_low": "Medium-low", "medium": "Medium", "medium_high": "Medium-high" }
+        "state": {
+          "low": "Low",
+          "medium_low": "Medium-low",
+          "medium": "Medium",
+          "medium_high": "Medium-high"
+        }
       }
     },
     "switch": {
-      "auto": { "name": "Auto ventilation" },
-      "shower": { "name": "Shower ventilation" }
+      "auto": {
+        "name": "Auto ventilation"
+      },
+      "shower": {
+        "name": "Shower ventilation"
+      }
     },
     "button": {
-      "reset_filter": { "name": "Reset filter runtime" }
+      "reset_filter": {
+        "name": "Reset filter runtime"
+      }
     },
     "date": {
-      "filter_changed": { "name": "Last filter change" }
+      "filter_changed": {
+        "name": "Last filter change"
+      }
     },
     "sensor": {
-      "highest_co2": { "name": "Highest CO2" },
+      "highest_co2": {
+        "name": "Highest CO2"
+      },
       "hvac_activity": {
         "name": "HVAC activity",
         "state": {
@@ -137,13 +174,32 @@
           "defrost": "Defrost (heat strips on)",
           "fan_only": "Fan only",
           "ventilating": "CO2 ventilating",
-          "fan_manual": "Fan on by hand"
+          "fan_manual": "Fan on by hand",
+          "fan_remote": "Fan on by remote"
         }
       },
-      "shower_humidity_diff": { "name": "Bathroom humidity above house" },
-      "last_cooling": { "name": "Last cooling run" },
-      "filter_runtime": { "name": "Fan runtime since filter change" },
-      "total_runtime": { "name": "Fan runtime total" },
+      "fan_caller": {
+        "name": "Fan turned on by",
+        "state": {
+          "off": "Off",
+          "co2": "CO2",
+          "shower": "Shower humidity",
+          "remote": "Remote",
+          "manual": "By hand"
+        }
+      },
+      "shower_humidity_diff": {
+        "name": "Bathroom humidity above house"
+      },
+      "last_cooling": {
+        "name": "Last cooling run"
+      },
+      "filter_runtime": {
+        "name": "Fan runtime since filter change"
+      },
+      "total_runtime": {
+        "name": "Fan runtime total"
+      },
       "status": {
         "name": "Status",
         "state": {
@@ -159,9 +215,17 @@
     }
   },
   "exceptions": {
-    "on_below_off": { "message": "The on setpoint must be above the off setpoint ({off} ppm)." },
-    "shower_off_too_high": { "message": "The shower off point has to be below both the on point and the high-until point." },
-    "filter_date_future": { "message": "The filter change date can't be in the future." },
-    "off_above_on": { "message": "The off setpoint must be below the on setpoint ({on} ppm)." }
+    "on_below_off": {
+      "message": "The on setpoint must be above the off setpoint ({off} ppm)."
+    },
+    "shower_off_too_high": {
+      "message": "The shower off point has to be below both the on point and the high-until point."
+    },
+    "filter_date_future": {
+      "message": "The filter change date can't be in the future."
+    },
+    "off_above_on": {
+      "message": "The off setpoint must be below the on setpoint ({on} ppm)."
+    }
   }
 }

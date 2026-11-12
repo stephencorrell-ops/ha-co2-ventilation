@@ -4,6 +4,13 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.15.0
+
+- New optional setting **Fan remotes** under Configure: pick the buttons or remotes whose automations run the fan. When the fan comes on within 30 seconds of a press, it's shown as turned on **by remote** instead of by hand: the CO2 card's status row reads "Turned on by remote", and the HVAC activity sensor shows **Fan on by remote** (`called_by: remote`).
+- New **Fan turned on by** sensor: Off, CO2, Shower humidity, Remote or By hand.
+- Thermostat card: a new **Remote** lane in the chart for fan runs started by a remote or by hand, so they no longer show as CO2 ventilation. The status pill, Vent chip and tooltip say Remote or By hand, and the totals row adds Remote / by hand when it ran. Earlier runs that were by hand land in the Remote lane too.
+- Thermostat card: the 24 hour chart shows its time labels again (12 AM, 4 AM, 8 AM...). They were skipped unless the chart happened to start on one of those hours. Each label also gets a small tick mark.
+
 ## 0.14.0
 
 - New setting under Thermostat: **Name for a fan-only call (G)**. If something besides the thermostat calls G (a humidifier, for example), name it here, like `Fan/Humidifier`. Both cards use it for the status, the G chip, the legend and the chart tooltip, and the HVAC activity sensor shows it as `g_label`. Leave it blank to keep "Fan only".
