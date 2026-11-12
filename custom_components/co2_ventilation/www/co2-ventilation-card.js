@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.15.0";
+const CARD_VERSION = "0.16.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -460,7 +460,7 @@ class Co2VentilationCard extends HTMLElement {
     const co2Txt = `CO\u2082${room ? ` \u00b7 ${room}` : ""}${Number.isFinite(a.co2_ppm) ? ` ${Math.round(a.co2_ppm)} ppm` : ""}`;
     const spLabel = speed ? SPEED_LABELS[speed] || speed : "";
     const humTxt = Number.isFinite(a.humidity_diff) ? `bathroom +${Math.round(a.humidity_diff)}%` : "";
-    const names = [thermo && nest, co2 && "CO\u2082", hum && "shower humidity"].filter(Boolean);
+    const names = [thermo && nest, remote && "remote", co2 && "CO\u2082", hum && "shower humidity"].filter(Boolean);
     if (names.length > 1) who = [`Called by ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`, spLabel && `${spLabel} wins`];
     else if (hum) who = ["Called by shower humidity", humTxt, a.shower_mode === "low" ? "drying out" : ""];
     else if (thermo && manual) who = [`Called by ${nest}`, `fan also on ${how}`];

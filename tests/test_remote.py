@@ -1,97 +1,96 @@
-"""Fan remotes: a fan turned on right after a remote press shows as remote."""
-
-from datetime import timedelta
-
-from freezegun.api import FrozenDateTimeFactory
+"""Remote fan select (Off or a speed): for button/remote automations."""
 
 from homeassistant.core import HomeAssistant
 
 from .test_activity import ACT, FAN, _act, _fan, _setup
 
-REMOTE = "event.hall_button"
+REMOTE = "select.co2_ventilation_remote_fan"
 CALLER = "sensor.co2_ventilation_fan_turned_on_by"
+CO2 = "sensor.front_room"
 
 
-async def _press(hass: HomeAssistant, when: str) -> None:
-    hass.states.async_set(REMOTE, when, {"event_type": "short_release"})
+async def _remote(hass: HomeAssistant, option: str) -> None:
+    await hass.services.async_call("select", "select_option", {"entity_id": REMOTE, "option": option}, blocking=True)
     await hass.async_block_till_done()
 
 
-async def _setup_remote(hass: HomeAssistant) -> None:
-    hass.states.async_set(REMOTE, "2026-11-01T00:00:00+00:00")
+async def _co2(hass: HomeAssistant, ppm: int) -> None:
+    hass.states.async_set(CO2, str(ppm), {"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"})
+    await hass.async_block_till_done()
+
+
+def _pct(hass: HomeAssistant) -> int:
+    return hass.states.get(FAN).attributes["percentage"]
+
+
+async def test_remote_runs_fan_at_its_speed(hass: HomeAssistant) -> None:
     await _setup(hass)
-    entry = hass.config_entries.async_entries("co2_ventilation")[0]
-    hass.config_entries.async_update_entry(entry, options={**entry.data, "fan_remotes": [REMOTE]})
-    await hass.async_block_till_done()
-
-
-async def test_press_then_fan_is_remote(hass: HomeAssistant) -> None:
-    await _setup_remote(hass)
-    await _press(hass, "2026-11-12T13:00:00+00:00")
-    _fan(hass, True, 50)
-    await hass.async_block_till_done()
+    assert hass.states.get(REMOTE).state == "off"
+    await _remote(hass, "medium")
+    assert hass.states.get(FAN).state == "on"
+    assert _pct(hass) == 75
     state, a = _act(hass)
     assert state == "fan_remote"
     assert a["called_by"] == ["remote"]
     assert hass.states.get(CALLER).state == "remote"
+    assert hass.states.get(REMOTE).state == "medium"
 
 
-async def test_press_just_after_fan_on_is_remote(hass: HomeAssistant) -> None:
-    await _setup_remote(hass)
-    _fan(hass, True, 25)
-    await hass.async_block_till_done()
-    assert _act(hass)[0] == "fan_manual"
-    await _press(hass, "2026-11-12T13:00:00+00:00")
-    assert _act(hass)[0] == "fan_remote"
-    assert hass.states.get(CALLER).state == "remote"
+async def test_speed_change_while_on_applies(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await _remote(hass, "low")
+    assert _pct(hass) == 25
+    await _remote(hass, "medium_high")
+    assert _pct(hass) == 100
 
 
-async def test_old_press_is_by_hand(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
-    await _setup_remote(hass)
-    await _press(hass, "2026-11-12T13:00:00+00:00")
-    freezer.tick(timedelta(minutes=5))
-    _fan(hass, True, 25)
-    await hass.async_block_till_done()
-    assert _act(hass)[0] == "fan_manual"
-    assert hass.states.get(CALLER).state == "manual"
+async def test_remote_off_turns_fan_off(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await _remote(hass, "low")
+    await _remote(hass, "off")
+    assert hass.states.get(FAN).state == "off"
+    assert hass.states.get(CALLER).state == "off"
+    assert _act(hass)[0] == "idle"
 
 
-async def test_remote_coming_back_online_is_not_a_press(hass: HomeAssistant) -> None:
-    await _setup_remote(hass)
-    hass.states.async_set(REMOTE, "unavailable")
-    await hass.async_block_till_done()
-    hass.states.async_set(REMOTE, "2026-11-01T00:00:00+00:00")
-    await hass.async_block_till_done()
-    _fan(hass, True, 25)
-    await hass.async_block_till_done()
-    assert _act(hass)[0] == "fan_manual"
+async def test_remote_off_leaves_co2_running(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await _co2(hass, 950)
+    await _remote(hass, "medium")
+    assert _pct(hass) == 75
+    assert _act(hass)[1]["called_by"] == ["remote", "co2"]
+    await _remote(hass, "off")
+    assert hass.states.get(FAN).state == "on"
+    assert _pct(hass) == 25  # back to the CO2 speed (low)
+    assert hass.states.get(CALLER).state == "co2"
+    assert hass.states.get(ACT).state == "ventilating"
 
 
-async def test_off_clears_remote_and_caller(hass: HomeAssistant) -> None:
-    await _setup_remote(hass)
-    await _press(hass, "2026-11-12T13:00:00+00:00")
-    _fan(hass, True, 25)
-    await hass.async_block_till_done()
+async def test_fan_turned_off_elsewhere_sets_remote_off(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await _remote(hass, "low")
     _fan(hass, False)
     await hass.async_block_till_done()
-    assert _act(hass)[0] == "idle"
-    assert hass.states.get(CALLER).state == "off"
+    assert hass.states.get(REMOTE).state == "off"
+    assert hass.states.get(FAN).state == "off"
 
 
-async def test_without_remotes_configured_it_is_by_hand(hass: HomeAssistant) -> None:
+async def test_remote_takes_over_a_hand_started_fan(hass: HomeAssistant) -> None:
     await _setup(hass)
-    hass.states.async_set(REMOTE, "2026-11-12T13:00:00+00:00")
-    await hass.async_block_till_done()
     _fan(hass, True, 25)
     await hass.async_block_till_done()
-    assert _act(hass)[0] == "fan_manual"
     assert hass.states.get(CALLER).state == "manual"
+    await _remote(hass, "medium_low")
+    assert _pct(hass) == 50
+    assert hass.states.get(CALLER).state == "remote"
+    await _remote(hass, "off")
+    assert hass.states.get(FAN).state == "off"
 
 
-async def test_caller_is_co2_when_ventilating(hass: HomeAssistant) -> None:
-    await _setup_remote(hass)
-    hass.states.async_set("sensor.front_room", "950", {"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"})
-    await hass.async_block_till_done()
-    assert hass.states.get(ACT).state == "ventilating"
-    assert hass.states.get(CALLER).state == "co2"
-    assert FAN
+async def test_remote_works_with_auto_off(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": "switch.co2_ventilation_auto_ventilation"}, blocking=True)
+    await _remote(hass, "low")
+    assert hass.states.get(FAN).state == "on"
+    await _remote(hass, "off")
+    assert hass.states.get(FAN).state == "off"

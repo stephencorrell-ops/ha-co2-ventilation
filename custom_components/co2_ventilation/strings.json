@@ -8,14 +8,12 @@
           "name": "Name",
           "co2_sensors": "CO2 sensors",
           "fan_entity": "Fan to control",
-          "fan_remotes": "Fan remotes (optional)",
           "startup_delay": "Startup delay"
         },
         "data_description": {
           "co2_sensors": "The fan turns on when any of these reaches the on setpoint, and off once all are below the off setpoint.",
           "fan_entity": "A switch, fan, or input boolean. With a multi-speed fan, the CO2 routine runs it at the Ventilation speed you pick (low by default).",
-          "startup_delay": "After Home Assistant restarts, wait this long for sensors to report, then turn the fan off unless CO2 is already above the on setpoint.",
-          "fan_remotes": "Buttons or remotes whose automations turn the fan on. When the fan comes on within 30 seconds of a press, the cards show it as turned on by remote instead of by hand."
+          "startup_delay": "After Home Assistant restarts, wait this long for sensors to report, then turn the fan off unless CO2 is already above the on setpoint."
         },
         "sections": {
           "thermostat": {
@@ -62,7 +60,6 @@
         "data": {
           "co2_sensors": "CO2 sensors",
           "fan_entity": "Fan to control",
-          "fan_remotes": "Fan remotes (optional)",
           "startup_delay": "Startup delay"
         },
         "sections": {
@@ -93,9 +90,6 @@
               "exhaust_fan": "Optional. Turned on for the shower only if the air conditioning ran in the last week (adjustable), so in heating season the shower's moisture stays in the house."
             }
           }
-        },
-        "data_description": {
-          "fan_remotes": "Buttons or remotes whose automations turn the fan on. When the fan comes on within 30 seconds of a press, the cards show it as turned on by remote instead of by hand."
         }
       }
     },
@@ -134,6 +128,16 @@
       "speed": {
         "name": "Ventilation speed",
         "state": {
+          "low": "Low",
+          "medium_low": "Medium-low",
+          "medium": "Medium",
+          "medium_high": "Medium-high"
+        }
+      },
+      "remote_fan": {
+        "name": "Remote fan",
+        "state": {
+          "off": "Off",
           "low": "Low",
           "medium_low": "Medium-low",
           "medium": "Medium",

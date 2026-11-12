@@ -56,7 +56,6 @@ from .const import (
     CONF_SHOWER,
     CONF_CO2_SENSORS,
     CONF_FAN_ENTITY,
-    CONF_FAN_REMOTES,
     CONF_STARTUP_DELAY,
     CONF_THERMOSTAT,
     DEFAULT_MIN_RUN,
@@ -67,7 +66,6 @@ from .const import (
     FAN_CALLER_CO2,
     FAN_CALLER_OFF,
     FAN_CALLER_SHOWER,
-    REMOTE_WINDOW_S,
     SPEED_BY_LEVEL,
     SPEED_LEVEL,
     THERMOSTAT_CALL_LEVEL,
@@ -128,9 +126,9 @@ class Co2VentilationController:
         # back on for this shower.
         self._hum_suppressed = False
         self._target_level: int | None = None
-        # A fan not turned on by this controller: was it a remote press?
-        self._remote_on = False
-        self._last_remote_press: datetime | None = None
+        # The Remote fan switch and speed, for remote/button automations.
+        self.remote_on = False
+        self.remote_speed: str = DEFAULT_SPEED
         self._exhaust_requested = False
         self.shower = ShowerHumidity()
         # When the air conditioning last ran (gates the bathroom exhaust fan).
@@ -155,11 +153,6 @@ class Co2VentilationController:
     @property
     def fan_entity(self) -> str:
         return self._conf(CONF_FAN_ENTITY)
-
-    @property
-    def remotes(self) -> list[str]:
-        """Buttons/remotes whose automations run the fan (optional)."""
-        return [e for e in (self._conf(CONF_FAN_REMOTES) or []) if e]
 
     @property
     def startup_delay(self) -> float:
@@ -261,7 +254,7 @@ class Co2VentilationController:
 
     async def async_start(self) -> None:
         """Start tracking. Call after the entities have restored their state."""
-        watched = [*self.sensors, self.fan_entity, *self.remotes]
+        watched = [*self.sensors, self.fan_entity]
         if self.shower_configured:
             watched += [self.shower_config[CONF_BATH_HUMIDITY], *self.house_humidity_sources()]
             if self.shower_config[CONF_EXHAUST_FAN]:
@@ -331,7 +324,7 @@ class Co2VentilationController:
         if self._co2_on:
             _LOGGER.debug("Startup: CO2 %s is high, fan on", self.max_co2)
             self._we_turned_on = False  # take it over below
-        if self._co2_on or self._shower_level():
+        if self._co2_on or self._shower_level() or self.remote_on:
             self._apply(force=True)
         elif self.auto_enabled:
             _LOGGER.debug("Startup: defaulting fan off")
@@ -347,32 +340,15 @@ class Co2VentilationController:
         new_state = event.data["new_state"]
         old_state = event.data["old_state"]
 
-        if entity_id in self.remotes and entity_id != self.fan_entity:
-            if self._is_press(old_state, new_state):
-                now = dt_util.utcnow()
-                self._last_remote_press = now
-                # The press can land just after the fan turned on.
-                if (
-                    self._fan_is_on()
-                    and not self._we_turned_on
-                    and self._on_since is not None
-                    and (now - self._on_since).total_seconds() <= REMOTE_WINDOW_S
-                ):
-                    self._remote_on = True
-            if entity_id not in self.sensors:
-                self.evaluate()
-                return
-
         if entity_id == self.fan_entity:
             was_on = old_state is not None and old_state.state == STATE_ON
             is_on = new_state is not None and new_state.state == STATE_ON
             if is_on and not was_on:
                 self._on_since = new_state.last_changed
-                self._remote_on = not self._we_turned_on and self._recent_press(
-                    new_state.last_changed
-                )
             elif was_on and not is_on:
-                self._remote_on = False
+                # Turned off (by hand or anything else): the remote request
+                # ends too, so the Remote fan switch goes off with it.
+                self.remote_on = False
                 if self.shower.active:
                     # Turned off during a shower: leave it off for this shower.
                     self._hum_suppressed = True
@@ -385,31 +361,17 @@ class Co2VentilationController:
 
         self.evaluate()
 
-    @staticmethod
-    def _is_press(old_state: Any, new_state: Any) -> bool:
-        """A real change on a remote, not it dropping off or coming back."""
-        bad = (STATE_UNKNOWN, STATE_UNAVAILABLE)
-        if new_state is None or old_state is None:
-            return False
-        if new_state.state in bad or old_state.state == STATE_UNAVAILABLE:
-            return False
-        return new_state.state != old_state.state
-
-    def _recent_press(self, when: datetime | None) -> bool:
-        if self._last_remote_press is None:
-            return False
-        when = when or dt_util.utcnow()
-        return abs((when - self._last_remote_press).total_seconds()) <= REMOTE_WINDOW_S
-
     def fan_caller(self) -> str:
-        """Who has the fan on: CO2, shower, a remote, by hand, or off."""
+        """Who has the fan on: the remote switch, CO2, shower, by hand, or off."""
         if not self._fan_is_on():
             return FAN_CALLER_OFF
-        if self._we_turned_on:
-            if self._hum_driving and not self._co2_on:
-                return FAN_CALLER_SHOWER
-            return FAN_CALLER_CO2
-        return CALLER_REMOTE if self._remote_on else CALLER_MANUAL
+        if not self._we_turned_on:
+            return CALLER_MANUAL
+        if self.remote_on:
+            return CALLER_REMOTE
+        if self._hum_driving and not self._co2_on:
+            return FAN_CALLER_SHOWER
+        return FAN_CALLER_CO2
 
     @callback
     def _recompute(self) -> None:
@@ -499,12 +461,12 @@ class Co2VentilationController:
         elif g:
             activity = ACTIVITY_FAN_ONLY
         elif fan_on:
-            if we_did:
-                activity = ACTIVITY_VENTILATING
-            elif self._remote_on:
+            if not we_did:
+                activity = ACTIVITY_FAN_MANUAL
+            elif self.remote_on:
                 activity = ACTIVITY_FAN_REMOTE
             else:
-                activity = ACTIVITY_FAN_MANUAL
+                activity = ACTIVITY_VENTILATING
         else:
             activity = ACTIVITY_IDLE
 
@@ -513,9 +475,11 @@ class Co2VentilationController:
             called_by.append(CALLER_THERMOSTAT)
         if fan_on:
             if not we_did:
-                called_by.append(CALLER_REMOTE if self._remote_on else CALLER_MANUAL)
+                called_by.append(CALLER_MANUAL)
             else:
-                if self._co2_on or not self._hum_driving:
+                if self.remote_on:
+                    called_by.append(CALLER_REMOTE)
+                if self._co2_on or not (self._hum_driving or self.remote_on):
                     called_by.append(CALLER_CO2)
                 if self._hum_driving:
                     called_by.append(CALLER_HUMIDITY)
@@ -657,6 +621,8 @@ class Co2VentilationController:
         shower = self._shower_level()
         if shower:
             levels.append(shower)
+        if self.remote_on:
+            levels.append(SPEED_LEVEL.get(self.remote_speed, 1))
         fan_on = self._fan_is_on()
 
         if levels:
@@ -668,6 +634,11 @@ class Co2VentilationController:
                 self._hum_driving = bool(shower)
                 if target != self._target_level:
                     self._set_level(target)
+            elif self.remote_on:
+                # The remote asked for it: take the fan over at its speed.
+                self._we_turned_on = True
+                self._hum_driving = bool(shower)
+                self._set_level(target)
             elif self._co2_on and not shower:
                 # Already running by hand: take over so it shuts off once CO2
                 # is back down, but leave its speed alone.
@@ -823,6 +794,19 @@ class Co2VentilationController:
         if self.ready and self._we_turned_on and self._fan_is_on():
             self._apply()
         self._notify()
+
+    @callback
+    def set_remote(self, on: bool | None = None, speed: str | None = None) -> None:
+        """Remote fan switch and speed, for button/remote automations.
+
+        On runs the fan at the remote speed (or higher if CO2 or the shower
+        want more); off turns it off unless CO2 or the shower still need it.
+        """
+        if speed is not None:
+            self.remote_speed = speed
+        if on is not None:
+            self.remote_on = on
+        self.evaluate()
 
     @callback
     def set_shower_enabled(self, enabled: bool) -> None:

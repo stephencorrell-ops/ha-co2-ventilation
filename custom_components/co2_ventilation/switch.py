@@ -1,4 +1,4 @@
-"""Auto ventilation on/off switch."""
+"""Auto ventilation and shower ventilation switches."""
 
 from __future__ import annotations
 
@@ -73,3 +73,4 @@ class ShowerVentilationSwitch(Co2VentilationEntity, SwitchEntity, RestoreEntity)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.controller.set_shower_enabled(False)
+

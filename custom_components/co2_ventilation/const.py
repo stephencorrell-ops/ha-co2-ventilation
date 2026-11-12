@@ -7,10 +7,6 @@ DOMAIN = "co2_ventilation"
 CONF_CO2_SENSORS = "co2_sensors"
 CONF_FAN_ENTITY = "fan_entity"
 CONF_STARTUP_DELAY = "startup_delay"
-# Optional buttons/remotes whose automations run the fan. A fan turned on
-# within REMOTE_WINDOW_S of a press is shown as turned on by remote.
-CONF_FAN_REMOTES = "fan_remotes"
-REMOTE_WINDOW_S = 30
 
 # Optional thermostat monitoring, set under a collapsible "Thermostat" section.
 CONF_THERMOSTAT = "thermostat"
@@ -61,6 +57,9 @@ SPEED_MEDIUM = "medium"
 SPEED_MEDIUM_HIGH = "medium_high"
 SPEEDS = [SPEED_LOW, SPEED_MEDIUM_LOW, SPEED_MEDIUM, SPEED_MEDIUM_HIGH]
 SPEED_LEVEL = {SPEED_LOW: 1, SPEED_MEDIUM_LOW: 2, SPEED_MEDIUM: 3, SPEED_MEDIUM_HIGH: 4}
+# Remote fan select: Off, or run the fan at one of the speeds.
+REMOTE_OFF = "off"
+REMOTE_OPTIONS = [REMOTE_OFF, *SPEEDS]
 
 # What the HVAC system is doing, for the HVAC activity sensor.
 ACTIVITY_IDLE = "idle"
