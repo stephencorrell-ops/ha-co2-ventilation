@@ -4,6 +4,10 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.16.1
+
+- CO2 card: a **Remote fan** row under CO2 speed with Off, Low, Med-low, Medium and Med-high buttons, so you can run the fan at a speed from the card. It's the same Remote fan select your automations can set.
+
 ## 0.16.0
 
 - New **Remote fan** select for button and remote automations: Off, Low, Medium-low, Medium or Medium-high. Pick a speed and the fan runs at it (or higher if CO2 or the shower need more, and it works with Auto ventilation off); pick Off and it turns off unless CO2 or the shower still need it. Turning the fan off any other way sets it back to Off, and it starts Off after a restart. These runs show as **Remote** on both cards, the HVAC activity sensor and the Fan turned on by sensor.

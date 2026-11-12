@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.16.0";
+const CARD_VERSION = "0.16.1";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -127,6 +127,7 @@ class Co2VentilationCard extends HTMLElement {
       min: byKey("min_run", "_minimum_run_time"),
       highest: byKey("highest_co2", "_highest_co2"),
       speed: byKey("speed", "_ventilation_speed"),
+      remote: byKey("remote_fan", "_remote_fan"),
       activity: byKey("hvac_activity", "_hvac_activity"),
       shower: byKey("shower", "_shower_ventilation"),
       showerDiff: byKey("shower_humidity_diff", "_bathroom_humidity_above_house"),
@@ -299,7 +300,8 @@ class Co2VentilationCard extends HTMLElement {
   .lock { border:1px solid var(--divider-color); background:transparent; color:var(--primary-text-color); border-radius:16px; padding:4px 12px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; }
   .lock ha-icon { --mdc-icon-size:18px; color:inherit; }
   .setpts:not(.locked) .lock { border-color:var(--primary-color); color:var(--primary-color); }
-  .seg { display:flex; gap:4px; flex:1; justify-content:flex-end; }
+  .seg { display:flex; flex-wrap:wrap; gap:4px; flex:1; justify-content:flex-end; }
+  #remote button { padding:4px 9px; }
   .seg button { border:1px solid var(--divider-color); background:transparent; color:var(--primary-text-color); border-radius:16px; padding:4px 12px; font:inherit; font-size:13px; cursor:pointer; }
   .seg button.on { background:var(--primary-color); border-color:var(--primary-color); color:var(--text-primary-color,#fff); }
   .chart { margin-top:12px; border-top:1px solid var(--divider-color); padding-top:10px; }
@@ -325,6 +327,7 @@ class Co2VentilationCard extends HTMLElement {
     <div class="row"><ha-icon icon="mdi:robot"></ha-icon><span class="l">Auto</span><span class="grow sub" id="autosub"></span><button class="tg" id="auto" aria-label="Auto ventilation"></button></div>
     <div class="row"><ha-icon icon="mdi:fan"></ha-icon><span class="l">HVAC fan</span><span class="grow sub" id="fansub"></span><button class="tg" id="fan" aria-label="HVAC fan"></button></div>
     ${e.speed ? `<div class="row"><ha-icon icon="mdi:fan-speed-1" id="speedicon"></ha-icon><span class="l">CO\u2082 speed</span><div class="seg" id="speed" role="group" aria-label="Ventilation speed">${(this._hass.states[e.speed]?.attributes?.options || Object.keys(SPEED_LABELS)).map((o) => `<button data-o="${esc(o)}">${esc(SPEED_LABELS[o] || o)}</button>`).join("")}</div></div>` : ""}
+    ${e.remote ? `<div class="row"><ha-icon icon="mdi:remote" id="remoteicon"></ha-icon><span class="l">Remote fan</span><div class="seg" id="remote" role="group" aria-label="Remote fan">${(this._hass.states[e.remote]?.attributes?.options || ["off", ...Object.keys(SPEED_LEVEL)]).map((o) => `<button data-o="${esc(o)}">${esc(o === "off" ? "Off" : SPEED_LABELS[o] || o)}</button>`).join("")}</div></div>` : ""}
     ${e.shower ? `<div class="row"><ha-icon icon="mdi:shower-head"></ha-icon><span class="l">Shower</span><span class="grow sub" id="showersub"></span><button class="tg" id="shower" aria-label="Shower ventilation"></button></div>
     <div class="hbar" id="hbar" hidden><div class="htrack" role="meter" aria-label="Bathroom humidity above house" id="htrack"><div class="hfill" id="hfill"></div><div class="htick" id="htoff"></div><div class="htick" id="hton"></div><div class="htick" id="hthigh"></div><div class="hpeak" id="hpeak"></div></div><span class="heta" id="heta"></span></div>` : ""}
     <div class="setpts locked" id="setpts">
@@ -356,6 +359,9 @@ class Co2VentilationCard extends HTMLElement {
     });
     $("speed")?.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", () => this._call("select", "select_option", { entity_id: e.speed, option: b.dataset.o }))
+    );
+    $("remote")?.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => this._call("select", "select_option", { entity_id: e.remote, option: b.dataset.o }))
     );
     $("range")?.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", () => {
@@ -619,6 +625,14 @@ class Co2VentilationCard extends HTMLElement {
         b.setAttribute("aria-pressed", b.dataset.o === cur ? "true" : "false");
       });
       $("speedicon")?.setAttribute("icon", `mdi:fan-speed-${SPEED_LEVEL[cur] || 1}`);
+    }
+    const remoteEl = $("remote");
+    if (remoteEl) {
+      const cur = hass.states[e.remote]?.state;
+      remoteEl.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.o === cur);
+        b.setAttribute("aria-pressed", b.dataset.o === cur ? "true" : "false");
+      });
     }
 
     for (const key of SLIDER_KEYS) {

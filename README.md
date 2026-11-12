@@ -33,7 +33,7 @@ To change sensors, the fan, or the startup delay later, use **Configure** on the
 
 - Sensors that are `unavailable` or `unknown` are skipped, which helps with Bluetooth sensors that miss a reading now and then.
 - If you turn the fan on by hand, it stays on until you turn it off. If CO2 crosses the on setpoint while it's running, auto ventilation takes over and will shut it off when the air is clear.
-- **Remote fan** (`select.co2_ventilation_remote_fan`): Off, Low, Medium-low, Medium or Medium-high, for button or remote automations. A speed runs the fan at that speed (higher if CO2 or the shower need more, and it works with Auto ventilation off); Off turns it off unless CO2 or the shower still need it. Turning the fan off any other way sets it back to Off, and it's Off after a restart. Runs started this way show as Remote on the cards.
+- **Remote fan** (`select.co2_ventilation_remote_fan`, also a row of buttons on the CO2 card): Off, Low, Medium-low, Medium or Medium-high, for button or remote automations. A speed runs the fan at that speed (higher if CO2 or the shower need more, and it works with Auto ventilation off); Off turns it off unless CO2 or the shower still need it. Turning the fan off any other way sets it back to Off, and it's Off after a restart. Runs started this way show as Remote on the cards.
 - Turning **Auto ventilation** off leaves the fan exactly as it is.
 
 ## Ventilation speed
