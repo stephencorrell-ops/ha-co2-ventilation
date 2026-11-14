@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.16.1";
+const CARD_VERSION = "0.17.0";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -17,6 +17,9 @@ const RANGES = [[6, "6 h"], [24, "24 h"], [168, "7 d"]];
 const rangeText = (h) => `Last ${RANGES.find(([x]) => x === h)?.[1].replace("7 d", "7 days").replace(" h", " hours") || h + " hours"}`;
 const SLIDER_KEYS = ["on", "off", "min", "son", "shigh", "soff", "smax"];
 const SLIDER_UNIT = { on: "ppm", off: "ppm", min: "min", son: "+%", shigh: "+%", soff: "+%", smax: "min" };
+// Each setpoint section is folded into a summary row until you tap Edit.
+const SECTION_OF = { on: "co2", off: "co2", min: "co2", son: "sh", shigh: "sh", soff: "sh", smax: "sh" };
+const FOLD_AFTER = 120; // seconds without a touch before an open section folds back up
 const SPEED_LABELS = { low: "Low", medium_low: "Med-low", medium: "Medium", medium_high: "Med-high", high: "High" };
 const SPEED_LEVEL = { low: 1, medium_low: 2, medium: 3, medium_high: 4 };
 // Seconds per turn for the spinning fan icon: faster at higher speeds.
@@ -291,15 +294,16 @@ class Co2VentilationCard extends HTMLElement {
   .htick { position:absolute; top:-3px; bottom:-3px; width:1.5px; background:var(--secondary-text-color); opacity:.55; }
   .hpeak { position:absolute; top:-4px; bottom:-4px; width:2px; margin-left:-1px; border-radius:1px; background:var(--primary-text-color); transition:left .4s; }
   .heta { flex:0 0 auto; min-width:64px; text-align:right; font-size:12px; color:var(--secondary-text-color); font-variant-numeric:tabular-nums; }
-  .setpts.locked input[type=range] { pointer-events:none; opacity:.4; }
+  .setpts .sum { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .sliders[hidden] { display:none; }
   .val { display:flex; align-items:center; justify-content:flex-end; gap:4px; }
   .val input { width:58px; box-sizing:border-box; text-align:right; font:inherit; font-size:14px; color:var(--primary-text-color); background:var(--secondary-background-color); border:1px solid var(--divider-color); border-radius:6px; padding:4px 6px; -moz-appearance:textfield; }
   .val input::-webkit-outer-spin-button, .val input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
   .val input:focus { outline:none; border-color:var(--primary-color); }
-  .setpts.locked .val input { background:transparent; border-color:transparent; color:var(--secondary-text-color); padding-right:0; }
   .lock { border:1px solid var(--divider-color); background:transparent; color:var(--primary-text-color); border-radius:16px; padding:4px 12px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; }
   .lock ha-icon { --mdc-icon-size:18px; color:inherit; }
-  .setpts:not(.locked) .lock { border-color:var(--primary-color); color:var(--primary-color); }
+  .lock { flex-shrink:0; }
+  .lock[aria-expanded=true] { border-color:var(--primary-color); color:var(--primary-color); }
   .seg { display:flex; flex-wrap:wrap; gap:4px; flex:1; justify-content:flex-end; }
   #remote button { padding:4px 9px; }
   .seg button { border:1px solid var(--divider-color); background:transparent; color:var(--primary-text-color); border-radius:16px; padding:4px 12px; font:inherit; font-size:13px; cursor:pointer; }
@@ -330,18 +334,25 @@ class Co2VentilationCard extends HTMLElement {
     ${e.remote ? `<div class="row"><ha-icon icon="mdi:remote" id="remoteicon"></ha-icon><span class="l">Remote fan</span><div class="seg" id="remote" role="group" aria-label="Remote fan">${(this._hass.states[e.remote]?.attributes?.options || ["off", ...Object.keys(SPEED_LEVEL)]).map((o) => `<button data-o="${esc(o)}">${esc(o === "off" ? "Off" : SPEED_LABELS[o] || o)}</button>`).join("")}</div></div>` : ""}
     ${e.shower ? `<div class="row"><ha-icon icon="mdi:shower-head"></ha-icon><span class="l">Shower</span><span class="grow sub" id="showersub"></span><button class="tg" id="shower" aria-label="Shower ventilation"></button></div>
     <div class="hbar" id="hbar" hidden><div class="htrack" role="meter" aria-label="Bathroom humidity above house" id="htrack"><div class="hfill" id="hfill"></div><div class="htick" id="htoff"></div><div class="htick" id="hton"></div><div class="htick" id="hthigh"></div><div class="hpeak" id="hpeak"></div></div><span class="heta" id="heta"></span></div>` : ""}
-    <div class="setpts locked" id="setpts">
-      <div class="row"><ha-icon icon="mdi:tune-variant"></ha-icon><span class="l">Setpoints</span><span class="grow sub" id="locksub">Locked</span>
-        <button class="lock" id="lock" aria-label="Unlock setpoints"><ha-icon icon="mdi:lock"></ha-icon><span id="locktxt">Unlock</span></button></div>
+    <div class="setpts" id="set_co2">
+      <div class="row"><ha-icon icon="mdi:tune-variant"></ha-icon><span class="l">Setpoints</span><span class="grow sub sum" id="sum_co2"></span>
+        <button class="lock" id="ed_co2" aria-expanded="false" aria-controls="sl_co2" aria-label="Edit CO\u2082 setpoints"><ha-icon icon="mdi:pencil"></ha-icon><span>Edit</span></button></div>
+      <div class="sliders" id="sl_co2" hidden>
       ${this._sliderRow("on", "mdi:arrow-collapse-up", "Fan on at", e.on)}
       ${this._sliderRow("off", "mdi:arrow-collapse-down", "Fan off at", e.off)}
       ${this._sliderRow("min", "mdi:timer-outline", "Minimum run", e.min)}
-      ${e.son ? `<div class="row sec"><ha-icon icon="mdi:shower-head"></ha-icon><span class="l">Shower</span><span class="grow sub">Bathroom vs. house humidity</span></div>` : ""}
+      </div>
+    </div>
+    ${e.son ? `<div class="setpts" id="set_sh">
+      <div class="row sec"><ha-icon icon="mdi:shower-head"></ha-icon><span class="l">Shower</span><span class="grow sub sum" id="sum_sh"></span>
+        <button class="lock" id="ed_sh" aria-expanded="false" aria-controls="sl_sh" aria-label="Edit shower setpoints"><ha-icon icon="mdi:pencil"></ha-icon><span>Edit</span></button></div>
+      <div class="sliders" id="sl_sh" hidden>
       ${this._sliderRow("son", "mdi:water-plus", "On above", e.son)}
       ${this._sliderRow("shigh", "mdi:fan-chevron-down", "High until", e.shigh)}
       ${this._sliderRow("soff", "mdi:water-minus", "Off below", e.soff)}
       ${this._sliderRow("smax", "mdi:timer-stop-outline", "Max run", e.smax)}
-    </div>
+      </div>
+    </div>` : ""}
   </div>
   ${this._config.show_chart ? `<div class="chart"><div class="rbar"><span class="sub" id="rangetxt"></span><span class="seg" id="range" role="group" aria-label="Chart range">${RANGES.map(([h, l]) => `<button data-h="${h}">${l}</button>`).join("")}</span></div><div class="legend" id="legend"></div><div id="svg"></div></div>` : ""}
 </ha-card>`;
@@ -376,15 +387,17 @@ class Co2VentilationCard extends HTMLElement {
       })
     );
     this._updateRange();
-    $("lock").addEventListener("click", () => this._setLocked(!this._locked));
-    this._setLocked(true);
+    this._open = { co2: false, sh: false };
+    clearTimeout(this._foldTimer);
+    for (const sec of ["co2", "sh"]) $(`ed_${sec}`)?.addEventListener("click", () => this._setOpen(sec, !this._open[sec]));
     for (const key of SLIDER_KEYS) {
       const input = $(`s_${key}`);
       if (!input) continue;
       const unit = ` ${SLIDER_UNIT[key]}`;
+      const sec = SECTION_OF[key];
       input.addEventListener("pointerdown", () => {
         this._dragging = true;
-        this._armRelock();
+        this._armFold();
       });
       input.addEventListener("input", () => {
         this._dragging = true;
@@ -392,16 +405,16 @@ class Co2VentilationCard extends HTMLElement {
       });
       input.addEventListener("change", async () => {
         this._dragging = false;
-        if (this._locked) {
+        if (!this._open[sec]) {
           this._render(true);
           return;
         }
-        this._armRelock(10);
+        this._armFold();
         await this._call("number", "set_value", { entity_id: e[key], value: Number(input.value) });
       });
       const box = $(`v_${key}`);
       box.addEventListener("focus", () => {
-        this._armRelock(60);
+        this._armFold();
         box.select();
       });
       box.addEventListener("keydown", (ev) => {
@@ -412,7 +425,7 @@ class Co2VentilationCard extends HTMLElement {
         }
       });
       box.addEventListener("change", async () => {
-        if (this._locked) return this._render(true);
+        if (!this._open[sec]) return this._render(true);
         const lo = Number(input.min), hi = Number(input.max), step = Number(input.step) || 1;
         let v = Number(box.value);
         if (!Number.isFinite(v) || box.value === "") {
@@ -422,7 +435,7 @@ class Co2VentilationCard extends HTMLElement {
         v = Math.min(hi, Math.max(lo, Math.round(v / step) * step));
         box.value = v;
         input.value = v;
-        this._armRelock(10);
+        this._armFold();
         await this._call("number", "set_value", { entity_id: e[key], value: v });
       });
       input.addEventListener("blur", () => (this._dragging = false));
@@ -527,30 +540,29 @@ class Co2VentilationCard extends HTMLElement {
     return Math.floor((level * 100) / count);
   }
 
-  _setLocked(locked) {
-    this._locked = locked;
-    clearTimeout(this._relockTimer);
+  // Open (Edit) or fold (Done) a setpoint section. An open section folds
+  // itself back up after FOLD_AFTER seconds without a touch.
+  _setOpen(sec, open) {
     const $ = (id) => this.shadowRoot.getElementById(id);
-    const box = $("setpts");
-    if (!box) return;
-    box.classList.toggle("locked", locked);
-    box.querySelectorAll("input").forEach((i) => (i.disabled = locked));
-    $("lock").querySelector("ha-icon").setAttribute("icon", locked ? "mdi:lock" : "mdi:lock-open-variant");
-    $("lock").setAttribute("aria-label", locked ? "Unlock setpoints" : "Lock setpoints");
-    $("locktxt").textContent = locked ? "Unlock" : "Lock";
-    $("locksub").textContent = locked ? "Locked" : "Unlocked \u2014 locks again in 30 s";
-    if (!locked) this._armRelock();
+    const btn = $(`ed_${sec}`), box = $(`sl_${sec}`);
+    if (!btn || !box) return;
+    this._open[sec] = open;
+    box.hidden = !open;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.querySelector("ha-icon").setAttribute("icon", open ? "mdi:check" : "mdi:pencil");
+    btn.querySelector("span").textContent = open ? "Done" : "Edit";
+    if (!open) this._dragging = false;
+    if (open) this._armFold();
+    else if (!Object.values(this._open).some(Boolean)) clearTimeout(this._foldTimer);
   }
 
-  _armRelock(seconds = 30) {
-    if (this._locked) return;
-    clearTimeout(this._relockTimer);
-    const sub = this.shadowRoot.getElementById("locksub");
-    if (sub) sub.textContent = `Unlocked \u2014 locks again in ${seconds} s`;
-    this._relockTimer = setTimeout(() => {
+  _armFold() {
+    clearTimeout(this._foldTimer);
+    this._foldTimer = setTimeout(() => {
       this._dragging = false;
-      this._setLocked(true);
-    }, seconds * 1000);
+      for (const sec of Object.keys(this._open || {})) if (this._open[sec]) this._setOpen(sec, false);
+      this._render();
+    }, FOLD_AFTER * 1000);
   }
 
   _sliderRow(key, icon, label, entityId) {
@@ -644,6 +656,14 @@ class Co2VentilationCard extends HTMLElement {
       const box = $(`v_${key}`);
       if (this.shadowRoot.activeElement !== box) box.value = Math.round(v);
     }
+
+    // Folded summaries of the setpoint sections.
+    const r = (k, d) => {
+      const v = this._num(e[k]);
+      return v == null ? d : Math.round(v);
+    };
+    if ($("sum_co2")) $("sum_co2").textContent = `On ${r("on", "\u2014")} \u00b7 off ${r("off", "\u2014")} ppm \u00b7 min ${r("min", "\u2014")} min`;
+    if ($("sum_sh")) $("sum_sh").textContent = `On +${r("son", "\u2014")}% \u00b7 high +${r("shigh", "\u2014")}% \u00b7 off +${r("soff", "\u2014")}% \u00b7 max ${r("smax", "\u2014")} min`;
 
     const legend = $("legend");
     if (legend) {
@@ -773,10 +793,19 @@ if (!customElements.get("co2-ventilation-card")) {
 // Chart lanes. The ventilation fan is split by who turned it on: CO2 or
 // shower humidity ("vent"), a remote, or by hand. Remote and by-hand runs
 // share the Remote lane.
-const MODES = ["heat", "strips", "cool", "fan", "vent", "remote"];
+// Lanes drawn in the activity chart. The Fan speed lane takes the old Fan
+// lane's place: it shades every blower run by the speed it ran at.
+const LANES = ["heat", "strips", "cool", "speed", "vent", "remote"];
+const LEGEND_MODES = ["heat", "strips", "cool", "vent", "remote"];
+// Blower speeds, slowest first. High only runs with the heat strips.
+const FAN_SPEEDS = ["low", "medium_low", "medium", "medium_high", "high"];
+// Shades of the theme's text color, so faster always stands out more, in
+// light and dark themes alike.
+const SPEED_MIX = { low: 22, medium_low: 38, medium: 55, medium_high: 74, high: 95 };
+const SPEED_COLOR = Object.fromEntries(Object.entries(SPEED_MIX).map(([k, p]) => [k, `color-mix(in srgb, var(--primary-text-color) ${p}%, transparent)`]));
 const MODE_COLOR = { heat: "#eb6834", strips: "#e34948", cool: "#2a78d6", fan: "#888780", vent: "#1baf7a", remote: "#6250d6", hand: "#6250d6" };
 const MODE_LABEL = { heat: "Heat pump", strips: "Heat strips", cool: "Cooling", fan: "Fan only", vent: "CO₂ ventilation", remote: "Fan on by remote", hand: "Fan on by hand" };
-const MODE_LANE = { heat: "Heat", strips: "Strips", cool: "Cool", fan: "Fan", vent: "Vent", remote: "Remote" };
+const MODE_LANE = { heat: "Heat", strips: "Strips", cool: "Cool", speed: "Fan speed", vent: "Vent", remote: "Remote" };
 const laneOf = (m) => (m === "hand" ? "remote" : m);
 // Which lane a running ventilation fan goes in, from the Fan turned on by
 // sensor (or, before it existed, the status sensor's "manual").
@@ -880,6 +909,7 @@ class Co2ThermostatCard extends HTMLElement {
       speed: byKey("speed"),
       activity: byKey("hvac_activity"),
       caller: byKey("fan_caller"),
+      fspeed: byKey("fan_speed"),
       on: byKey("on_setpoint"),
       off: byKey("off_setpoint"),
       filter: byKey("filter_runtime"),
@@ -949,7 +979,7 @@ class Co2ThermostatCard extends HTMLElement {
     this._e = e;
     const end = new Date();
     const start = new Date(end.getTime() - this._hours * 3600 * 1000);
-    const plain = [e.g, e.y, e.o, e.w2, e.vent, e.caller, e.status, e.temp, e.hum, e.highest].filter(Boolean);
+    const plain = [e.g, e.y, e.o, e.w2, e.vent, e.caller, e.fspeed, e.status, e.temp, e.hum, e.highest].filter(Boolean);
     const ws = (ids, attrs) =>
       this._hass.callWS({
         type: "history/history_during_period",
@@ -1025,6 +1055,33 @@ class Co2ThermostatCard extends HTMLElement {
     return segs;
   }
 
+  // Blower speed runs from the Fan speed sensor's history: [{ sp, a, b }].
+  // Empty until that sensor has recorded something.
+  _speedSegments() {
+    const h = this._history, e = this._e;
+    const pts = (e?.fspeed && h?.data?.[e.fspeed]) || [];
+    const end = Math.max(h?.end || 0, Date.now());
+    const out = [];
+    pts.forEach((p, i) => {
+      if (!FAN_SPEEDS.includes(p.s)) return;
+      const a = Math.max(p.t, h.start);
+      const b = i + 1 < pts.length ? pts[i + 1].t : end;
+      if (b <= a) return;
+      const last = out[out.length - 1];
+      if (last && last.sp === p.s && last.b === a) last.b = b;
+      else out.push({ sp: p.s, a, b });
+    });
+    return out;
+  }
+
+  _speedNow() {
+    const e = this._e, hass = this._hass;
+    const s = hass.states[e.fspeed]?.state;
+    if (FAN_SPEEDS.includes(s)) return s;
+    if (s === "off") return null;
+    return hass.states[e.activity]?.attributes?.fan_speed || null;
+  }
+
   // ---------- render ----------
 
   _render() {
@@ -1083,6 +1140,13 @@ class Co2ThermostatCard extends HTMLElement {
   .run .v { font-size:20px; font-weight:500; color:var(--primary-text-color); font-variant-numeric:tabular-nums; }
   .run .v small { font-size:13px; font-weight:400; color:var(--secondary-text-color); }
   .run .s { font-size:12px; color:var(--secondary-text-color); }
+  .speeds { margin-top:10px; }
+  .speeds .k { font-size:12px; color:var(--secondary-text-color); margin-bottom:6px; }
+  .speeds .grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+  .speeds .t { background:var(--secondary-background-color); border-radius:10px; padding:8px 10px; min-width:0; }
+  .speeds .n { font-size:12px; color:var(--secondary-text-color); display:flex; align-items:center; gap:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .speeds .n i { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+  .speeds .v { font-size:15px; font-weight:500; color:var(--primary-text-color); font-variant-numeric:tabular-nums; }
   .dot { width:8px; height:8px; border-radius:50%; background:var(--divider-color); display:inline-block; }
   .dot.on { background:#1baf7a; }
   .btn.warn { border-color:var(--error-color,#d03b3b); color:var(--error-color,#d03b3b); }
@@ -1095,7 +1159,7 @@ class Co2ThermostatCard extends HTMLElement {
   .panel .err { flex-basis:100%; font-size:12px; color:var(--error-color,#d03b3b); }
   .note { font-size:13px; color:var(--secondary-text-color); padding:4px 0 8px; }
   svg text { font-size:11px; fill:var(--secondary-text-color); font-family:inherit; }
-  @media (max-width: 480px) { .stats { grid-template-columns:1fr 1fr; } .totals { grid-template-columns:1fr 1fr; } }
+  @media (max-width: 480px) { .stats { grid-template-columns:1fr 1fr; } .totals { grid-template-columns:1fr 1fr; } .speeds .grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 </style>
 <ha-card>
   <div class="head"><ha-icon icon="mdi:thermostat"></ha-icon><div class="title">${esc(this._config.title || "Thermostat")}</div><ha-icon icon="mdi:fan" class="fan" id="fanicon"></ha-icon><span class="pill" id="pill"></span></div>
@@ -1125,6 +1189,7 @@ class Co2ThermostatCard extends HTMLElement {
       <span class="err" id="dateerr"></span>
     </div>
   </div>` : ""}
+  ${e.fspeed ? `<div class="speeds"><div class="k" id="speedstxt">Fan time by speed</div><div class="grid" id="speedtiles"></div></div>` : ""}
 </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
     $("range").querySelectorAll("button").forEach((b) =>
@@ -1203,7 +1268,9 @@ class Co2ThermostatCard extends HTMLElement {
   }
 
   _legend() {
-    return MODES.map((m) => `<span><i style="background:${MODE_COLOR[m]}"></i>${esc(m === "remote" ? "Remote or by hand" : this._ml(m))}</span>`).join("");
+    const modes = LEGEND_MODES.map((m) => `<span><i style="background:${MODE_COLOR[m]}"></i>${esc(m === "remote" ? "Remote or by hand" : this._ml(m))}</span>`).join("");
+    const speeds = this._e?.fspeed ? `<span>Fan speed ${FAN_SPEEDS.map((sp) => `<i style="background:${SPEED_COLOR[sp]}" title="${SPEED_LABELS[sp]}"></i>`).join("")} low to high</span>` : "";
+    return modes + speeds;
   }
 
   // Lane key for the ventilation fan right now, or false if it's off.
@@ -1227,7 +1294,8 @@ class Co2ThermostatCard extends HTMLElement {
     const extra = ventKey && ventKey !== "vent" ? ` + ${ventKey === "remote" ? "remote" : "fan by hand"}` : "";
     const label = defrost ? "Defrost, heat strips on" : main.length ? main.map((m) => this._ml(m)).join(" + ") + extra : vent ? MODE_LABEL[ventKey] : "Idle";
     const color = MODE_COLOR[main[0] || ventKey || ""];
-    pill.textContent = label;
+    const spNow = this._speedNow();
+    pill.textContent = spNow ? `${label} \u00b7 ${SPEED_LABELS[spNow]}` : label;
     pill.style.background = color ? `${color}26` : "";
     pill.style.color = color ? "var(--primary-text-color)" : "";
 
@@ -1307,7 +1375,7 @@ class Co2ThermostatCard extends HTMLElement {
       return;
     }
     const e = this._e;
-    const W = 640, L = 40, R = 10;
+    const W = 640, L = 62, R = 10;
     const start = h.start, end = Math.max(h.end, Date.now());
     const x = (t) => L + ((t - start) / (end - start)) * (W - L - R);
     this._geom = { W, L, R, t: (px) => start + ((px - L) / (W - L - R)) * (end - start) };
@@ -1333,10 +1401,16 @@ class Co2ThermostatCard extends HTMLElement {
 
     // Activity lanes
     svg += `<text x="${L}" y="11">Activity</text>`;
-    MODES.forEach((m, i) => {
+    const speedSegs = this._speedSegments();
+    this._speedSegs = speedSegs;
+    LANES.forEach((m, i) => {
       const y0 = 18 + i * 13;
       svg += `<text x="${L - 6}" y="${y0 + 9}" text-anchor="end">${MODE_LANE[m]}</text>`;
       svg += `<rect x="${L}" y="${y0 + 1}" width="${W - L - R}" height="10" rx="2" fill="var(--divider-color)" opacity=".45"/>`;
+      if (m === "speed") {
+        for (const s of speedSegs) svg += `<rect x="${x(s.a).toFixed(1)}" y="${y0 + 1}" width="${Math.max(1.5, x(s.b) - x(s.a)).toFixed(1)}" height="10" rx="2" style="fill:${SPEED_COLOR[s.sp]}"><title>${SPEED_LABELS[s.sp]}</title></rect>`;
+        return;
+      }
       for (const s of segs) if (laneOf(s.m) === m) svg += `<rect x="${x(s.a).toFixed(1)}" y="${y0 + 1}" width="${Math.max(1.5, x(s.b) - x(s.a)).toFixed(1)}" height="10" rx="2" fill="${MODE_COLOR[m]}"/>`;
     });
 
@@ -1382,6 +1456,20 @@ class Co2ThermostatCard extends HTMLElement {
     const tot = this.shadowRoot.getElementById("totals");
     if (tot) tot.style.setProperty("--cols", show.length);
     if (tot) tot.innerHTML = show.map((m) => `<div><div class="n"><i style="background:${MODE_COLOR[m]}"></i>${esc(m === "remote" ? "Remote / by hand" : this._ml(m))}</div><div class="v">${fmtDur(totals[m] || 0)}</div></div>`).join("");
+
+    // Fan time at each speed in the window. Blank until the Fan speed sensor
+    // has history; if it started partway through, say from when.
+    const tiles = this.shadowRoot.getElementById("speedtiles");
+    if (tiles) {
+      const bySpeed = {};
+      for (const s of speedSegs) bySpeed[s.sp] = (bySpeed[s.sp] || 0) + (s.b - s.a);
+      const pts = h.data[e.fspeed] || [];
+      const recorded = pts.length > 0;
+      const from = recorded && pts[0].t > start + 60000 ? pts[0].t : null;
+      const txt = this.shadowRoot.getElementById("speedstxt");
+      if (txt) txt.textContent = `Fan time by speed${from ? ` \u00b7 recorded since ${new Date(from).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}`;
+      tiles.innerHTML = FAN_SPEEDS.map((sp) => `<div class="t"><div class="n"><i style="background:${SPEED_COLOR[sp]}"></i>${SPEED_LABELS[sp]}</div><div class="v">${recorded ? fmtDur(bySpeed[sp] || 0) : "\u2014"}</div></div>`).join("");
+    }
   }
 
   _panel(title, pts, y0, ph, color, segs, x, start, end, setSeries, decimals, refs = []) {
@@ -1448,10 +1536,11 @@ class Co2ThermostatCard extends HTMLElement {
       return best ?? arr?.[0];
     };
     const modes = (this._segs || []).filter((s) => s.a <= t && s.b > t).map((s) => this._ml(s.m));
+    const sp = (this._speedSegs || []).find((s) => s.a <= t && s.b > t)?.sp;
     const tv = near(this._lines.temp), hv = near(this._lines.hum), cv = near(this._lines.co2);
     const d = new Date(t);
     const when = this._hours > 24 ? d.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    tip.innerHTML = `<b>${esc(when)}</b><br>${esc(modes.join(" + ") || "Idle")}<br>${tv ? `${tv.v.toFixed(1)} ${esc(this._tempUnit())}` : "—"} · ${hv ? `${Math.round(hv.v)} %` : "—"}<br>CO₂ ${cv ? Math.round(cv.v) : "—"} ppm`;
+    tip.innerHTML = `<b>${esc(when)}</b><br>${esc(modes.join(" + ") || "Idle")}${sp ? ` \u00b7 fan ${esc(SPEED_LABELS[sp])}` : ""}<br>${tv ? `${tv.v.toFixed(1)} ${esc(this._tempUnit())}` : "—"} · ${hv ? `${Math.round(hv.v)} %` : "—"}<br>CO₂ ${cv ? Math.round(cv.v) : "—"} ppm`;
     tip.style.display = "block";
     const scale = rect.width / this._geom.W;
     const left = px * scale;

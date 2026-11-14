@@ -4,6 +4,13 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.17.0
+
+- New **Fan speed** sensor: the speed the blower is actually running at (the highest energized tap): Off, Low, Medium-low, Medium, Medium-high, or High, which only runs with the heat strips. Its history starts when you install this update.
+- Thermostat card: the Fan lane is now a **Fan speed** lane, shaded lighter to brighter from Low to High. The status pill shows the current speed (for example "Fan only · Medium"), the chart tooltip shows the speed at that time, and new **Fan time by speed** tiles at the bottom of the card, under the runtime counters, follow the 6 h / 24 h / 7 d buttons.
+- Thermostat card: the activity lane labels have more room, so "Remote" is no longer cut off.
+- CO2 card: the Setpoints and Shower settings are folded into one-line summaries. Tap **Edit** to open the sliders and **Done** to close them; they fold on their own after 2 minutes without a touch. This replaces the Lock/Unlock button.
+
 ## 0.16.1
 
 - CO2 card: a **Remote fan** row under CO2 speed with Off, Low, Med-low, Medium and Med-high buttons, so you can run the fan at a speed from the card. It's the same Remote fan select your automations can set.

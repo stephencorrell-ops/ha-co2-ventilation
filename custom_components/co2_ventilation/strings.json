@@ -192,6 +192,17 @@
           "manual": "By hand"
         }
       },
+      "fan_speed": {
+        "name": "Fan speed",
+        "state": {
+          "off": "Off",
+          "low": "Low",
+          "medium_low": "Medium-low",
+          "medium": "Medium",
+          "medium_high": "Medium-high",
+          "high": "High"
+        }
+      },
       "shower_humidity_diff": {
         "name": "Bathroom humidity above house"
       },

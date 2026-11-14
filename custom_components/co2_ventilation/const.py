@@ -101,6 +101,10 @@ FAN_CALLERS = [FAN_CALLER_OFF, FAN_CALLER_CO2, FAN_CALLER_SHOWER, CALLER_REMOTE,
 THERMOSTAT_CALL_LEVEL = 3
 AUX_HEAT_LEVEL = 5
 SPEED_BY_LEVEL = {1: "low", 2: "medium_low", 3: "medium", 4: "medium_high", 5: "high"}
+# Blower speed sensor: what the motor is actually running at (the highest
+# energized tap), so its history can be charted. High only runs with W2.
+FAN_SPEED_OFF = "off"
+FAN_SPEEDS = [FAN_SPEED_OFF, *SPEED_BY_LEVEL.values()]
 DEFAULT_SPEED = SPEED_LOW
 
 STATUS_STARTING = "starting"

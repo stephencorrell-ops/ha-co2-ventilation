@@ -23,7 +23,15 @@ except ImportError:  # Home Assistant before 2025.2
     )
 
 from . import Co2VentilationConfigEntry
-from .const import ACTIVITIES, CONF_CLIMATE, FAN_CALLERS, STATUSES, THERMOSTAT_KEYS
+from .const import (
+    ACTIVITIES,
+    CONF_CLIMATE,
+    FAN_CALLERS,
+    FAN_SPEED_OFF,
+    FAN_SPEEDS,
+    STATUSES,
+    THERMOSTAT_KEYS,
+)
 from .entity import Co2VentilationEntity
 
 
@@ -39,6 +47,7 @@ async def async_setup_entry(
             StatusSensor(controller, "status"),
             HvacActivitySensor(controller, "hvac_activity"),
             FanCallerSensor(controller, "fan_caller"),
+            FanSpeedSensor(controller, "fan_speed"),
             *(
                 [ShowerHumiditySensor(controller, "shower_humidity_diff")]
                 if controller.shower_configured
@@ -148,11 +157,8 @@ class FanRuntimeSensor(Co2VentilationEntity, RestoreSensor):
         return attrs
 
 
-class HvacActivitySensor(Co2VentilationEntity, SensorEntity):
-    """What the HVAC is doing right now, who called for it, and the blower speed."""
-
-    _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = ACTIVITIES
+class _WatchesHvac(Co2VentilationEntity):
+    """Updates when a thermostat call input or the ventilation fan changes."""
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -171,6 +177,13 @@ class HvacActivitySensor(Co2VentilationEntity, SensorEntity):
             self.async_on_remove(
                 async_track_state_change_event(self.hass, list(set(watched)), _changed)
             )
+
+
+class HvacActivitySensor(_WatchesHvac, SensorEntity):
+    """What the HVAC is doing right now, who called for it, and the blower speed."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ACTIVITIES
 
     @property
     def native_value(self) -> str:
@@ -196,6 +209,33 @@ class HvacActivitySensor(Co2VentilationEntity, SensorEntity):
         info = self.controller.hvac_activity()
         info.pop("activity")
         return info
+
+
+class FanSpeedSensor(_WatchesHvac, SensorEntity):
+    """The speed the blower is running at: the highest tap that's energized.
+
+    G and Y run medium, the heat strips (W2) run high, and the ventilation fan
+    runs whatever speed won. Its history drives the thermostat card's fan
+    speed lane and time-by-speed totals.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = FAN_SPEEDS
+
+    @property
+    def native_value(self) -> str:
+        return self.controller.hvac_activity()["fan_speed"] or FAN_SPEED_OFF
+
+    @property
+    def icon(self) -> str:
+        return {
+            "off": "mdi:fan-off",
+            "low": "mdi:fan-speed-1",
+            "medium_low": "mdi:fan-speed-1",
+            "medium": "mdi:fan-speed-2",
+            "medium_high": "mdi:fan-speed-3",
+            "high": "mdi:fan-chevron-up",
+        }.get(self.native_value, "mdi:fan")
 
 
 class FanCallerSensor(Co2VentilationEntity, SensorEntity):

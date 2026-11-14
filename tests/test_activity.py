@@ -156,3 +156,25 @@ async def test_g_label_from_settings(hass: HomeAssistant) -> None:
     assert state == "fan_only"
     assert a["g_label"] == "Fan/Humidifier"
     assert a["called_by"] == ["thermostat"]
+
+
+FAN_SPEED = "sensor.co2_ventilation_fan_speed"
+
+
+async def test_fan_speed_sensor_tracks_the_blower(hass: HomeAssistant) -> None:
+    """Off when idle, medium for G or Y, high with the strips, else the vent speed."""
+    await _setup(hass)
+    speed = lambda: hass.states.get(FAN_SPEED).state  # noqa: E731
+    assert speed() == "off"
+    await _set(hass, g=True)
+    assert speed() == "medium"
+    await _set(hass, y=True, w2=True)
+    assert speed() == "high"
+    await _set(hass, g=False, y=False, w2=False)
+    assert speed() == "off"
+    _fan(hass, True, 25)
+    await hass.async_block_till_done()
+    assert speed() == "low"
+    _fan(hass, True, 100)
+    await hass.async_block_till_done()
+    assert speed() == "medium_high"

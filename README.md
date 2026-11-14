@@ -58,6 +58,7 @@ With the default name, the entity IDs are:
 | `date.co2_ventilation_last_filter_change` | When the filter was last changed; set it by hand for an earlier change |
 | `sensor.co2_ventilation_hvac_activity` | What the HVAC is doing: Idle, Heat pump heating, Heat pump + heat strips, Heat strips, Cooling, Defrost, Fan only, CO2 ventilating, Fan on by hand, Fan on by remote. Attributes say who called for it (`called_by`: thermostat, co2, humidity, remote, manual), the thermostat's name, and the speed the blower is actually running (`fan_speed`) |
 | `sensor.co2_ventilation_fan_turned_on_by` | Who has the fan on: Off, CO2, Shower humidity, Remote (the Remote fan select), By hand. Its history splits CO2 runs from remote ones on the thermostat card |
+| `sensor.co2_ventilation_fan_speed` | The speed the blower is running at: Off, Low, Medium-low, Medium, Medium-high, or High (only with the heat strips). G and Y run Medium; the ventilation fan runs whatever speed won. Its history drives the thermostat card's Fan speed lane and time-by-speed tiles |
 | `sensor.co2_ventilation_status` | Idle, Ventilating, Finishing minimum run, Fan on manually, Auto off, Starting up, No sensor data |
 
 ## Shower humidity
@@ -101,7 +102,7 @@ The blower counts as running whenever the fan call, the heat strip call, or the 
 
 ### Thermostat history card
 
-Add **CO2 Ventilation: thermostat history** from **Add card**, or use `type: custom:co2-thermostat-card`. It shows the current calls, temperature, humidity and highest CO2, a timeline of heat pump, heat strip, cooling, fan only and ventilation runs, three charts on the same time axis with those runs shaded behind them, run totals for the window, and the fan runtime counters with a two-tap filter reset.
+Add **CO2 Ventilation: thermostat history** from **Add card**, or use `type: custom:co2-thermostat-card`. It shows the current calls, temperature, humidity and highest CO2, a timeline of heat pump, heat strip, cooling, ventilation and remote runs with a Fan speed lane shaded by how fast the blower ran, three charts on the same time axis with those runs shaded behind them, run totals for the window, the fan runtime counters with a two-tap filter reset, and how long the fan ran at each speed.
 
 ```yaml
 type: custom:co2-thermostat-card
@@ -116,7 +117,7 @@ The integration ships its own card; there's nothing extra to install. After a re
 - Each room's CO2, colored green / amber / red against your setpoints (tap a room for its history)
 - Auto ventilation and HVAC fan toggles, with minutes left on the minimum run
 - Low / Med-low / Medium speed buttons when the fan has speeds (turning the fan on from the card uses the selected speed)
-- Setpoint and minimum run controls, locked by default so a stray touch can't change them. Tap **Unlock**, then drag a slider or tap the number and type a value. They lock again 10 seconds after a change (30 seconds if you don't touch anything).
+- Setpoint and minimum run controls, folded into a one-line summary (and the same for the shower settings) so a stray touch can't change them. Tap **Edit** to open the sliders, then drag one or tap the number and type a value. Tap **Done** to fold them back up; they also fold on their own after 2 minutes without a touch.
 - A chart of the last 6 hours, 24 hours or 7 days (buttons on the card) with fan run time shaded and live setpoint lines
 
 Options, all optional:
