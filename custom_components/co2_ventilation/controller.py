@@ -116,6 +116,10 @@ class Co2VentilationController:
         self.ready = False
         self.max_co2: float | None = None
         self.max_source: str | None = None
+        # The CO2 sensor that started the current CO2 run (the room that
+        # crossed the on setpoint). Kept for the whole run, even if another
+        # room becomes the highest; cleared when CO2 lets go of the fan.
+        self.co2_trigger: str | None = None
         self.status: str = STATUS_STARTING
 
         self._we_turned_on = False
@@ -321,6 +325,7 @@ class Co2VentilationController:
             and self.max_co2 is not None
             and self.max_co2 >= self.on_setpoint
         )
+        self._sync_trigger()
         if self._co2_on:
             _LOGGER.debug("Startup: CO2 %s is high, fan on", self.max_co2)
             self._we_turned_on = False  # take it over below
@@ -510,6 +515,7 @@ class Co2VentilationController:
             "calls": {"g": g, "y": y, "o": o, "w2": w2},
             "co2_source": self.max_source if we_did and CALLER_CO2 in called_by else None,
             "co2_ppm": self.max_co2 if we_did and CALLER_CO2 in called_by else None,
+            "co2_trigger": self.co2_trigger if we_did and self._co2_on else None,
             "humidity_diff": self.shower.diff if self.shower_configured else None,
             "shower_mode": self.shower.mode if self.shower_configured else None,
         }
@@ -530,6 +536,7 @@ class Co2VentilationController:
             self._update_shower()
             self._decide_co2()
             self._apply()
+        self._sync_trigger()
         self._update_status()
         self._notify()
 
@@ -555,6 +562,14 @@ class Co2VentilationController:
                 self._cancel_pending_off()
         elif not self.auto_enabled:
             self._cancel_pending_off()
+
+    @callback
+    def _sync_trigger(self) -> None:
+        """Remember which room started a CO2 run; forget it when the run ends."""
+        if not self._co2_on:
+            self.co2_trigger = None
+        elif self.co2_trigger is None:
+            self.co2_trigger = self.max_source
 
     @callback
     def _update_shower(self) -> None:

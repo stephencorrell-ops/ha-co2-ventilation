@@ -241,3 +241,24 @@ async def test_takes_over_manual_fan_when_high(hass: HomeAssistant, freezer) -> 
     _co2(hass, "sensor.bedroom", 600)
     await hass.async_block_till_done()
     assert hass.states.get(FAN).state == "off"
+
+
+async def test_trigger_room_stays_while_another_room_climbs(hass: HomeAssistant) -> None:
+    """The room that crossed the on setpoint is remembered for the run."""
+    entry = await _setup(hass)
+    controller = entry.runtime_data
+    _co2(hass, "sensor.bedroom", 1000)
+    await hass.async_block_till_done()
+    assert hass.states.get(FAN).state == "on"
+    assert controller.co2_trigger == "sensor.bedroom"
+    _co2(hass, "sensor.living", 1100)
+    await hass.async_block_till_done()
+    assert controller.max_source == "sensor.living"
+    assert controller.co2_trigger == "sensor.bedroom"
+    _co2(hass, "sensor.bedroom", 500)
+    _co2(hass, "sensor.living", 500)
+    controller.min_run_minutes = 0
+    controller.evaluate()
+    await hass.async_block_till_done()
+    assert hass.states.get(FAN).state == "off"
+    assert controller.co2_trigger is None

@@ -4,6 +4,11 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.17.1
+
+- CO2 card: when CO2 is running the fan, the status row names the room that started the run and its reading now, for example "Called by CO₂ in Bedroom · 1012 ppm", or "Called by Nest and CO₂ in Bedroom · Medium wins" when the thermostat is calling too. It uses the sensor's Home Assistant area, or its name if it has no area. The room stays the same for the whole run even if another room climbs higher.
+- HVAC activity sensor: new `co2_trigger` attribute, the CO2 sensor that started the current CO2 run.
+
 ## 0.17.0
 
 - New **Fan speed** sensor: the speed the blower is actually running at (the highest energized tap): Off, Low, Medium-low, Medium, Medium-high, or High, which only runs with the heat strips. Its history starts when you install this update.

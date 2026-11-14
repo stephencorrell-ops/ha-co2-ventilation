@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.17.0";
+const CARD_VERSION = "0.17.1";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -166,6 +166,15 @@ class Co2VentilationCard extends HTMLElement {
   _num(id, fallback = null) {
     const v = parseFloat(this._hass.states[id]?.state);
     return Number.isFinite(v) ? v : fallback;
+  }
+
+  // Where a sensor is: its Home Assistant area (its own, else its device's),
+  // else its name without "CO2".
+  _area(id) {
+    const hass = this._hass;
+    const ent = hass.entities?.[id];
+    const areaId = ent?.area_id || (ent?.device_id && hass.devices?.[ent.device_id]?.area_id);
+    return hass.areas?.[areaId]?.name || this._name(id);
   }
 
   _name(id) {
@@ -475,11 +484,16 @@ class Co2VentilationCard extends HTMLElement {
     else if (thermo && manual) what += " + fan on";
     else if (key === "ventilating" && hum && !co2) what = "Clearing shower humidity";
 
-    const room = a.co2_source ? (hass.states[a.co2_source]?.attributes?.friendly_name || a.co2_source).replace(/\s*(carbon dioxide|co2)\s*$/i, "") : "";
-    const co2Txt = `CO\u2082${room ? ` \u00b7 ${room}` : ""}${Number.isFinite(a.co2_ppm) ? ` ${Math.round(a.co2_ppm)} ppm` : ""}`;
+    // The room that started the CO2 run (falls back to the highest reading on
+    // an older integration), and its reading now.
+    const trig = a.co2_trigger || a.co2_source;
+    const room = trig ? this._area(trig) : "";
+    const trigPpm = trig ? this._num(trig) : null;
+    const ppm = trigPpm ?? (Number.isFinite(a.co2_ppm) ? a.co2_ppm : null);
+    const co2Txt = `CO\u2082 in ${room || "the house"}${ppm != null ? ` \u00b7 ${Math.round(ppm)} ppm` : ""}`;
     const spLabel = speed ? SPEED_LABELS[speed] || speed : "";
     const humTxt = Number.isFinite(a.humidity_diff) ? `bathroom +${Math.round(a.humidity_diff)}%` : "";
-    const names = [thermo && nest, remote && "remote", co2 && "CO\u2082", hum && "shower humidity"].filter(Boolean);
+    const names = [thermo && nest, remote && "remote", co2 && (room ? `CO\u2082 in ${room}` : "CO\u2082"), hum && "shower humidity"].filter(Boolean);
     if (names.length > 1) who = [`Called by ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`, spLabel && `${spLabel} wins`];
     else if (hum) who = ["Called by shower humidity", humTxt, a.shower_mode === "low" ? "drying out" : ""];
     else if (thermo && manual) who = [`Called by ${nest}`, `fan also on ${how}`];

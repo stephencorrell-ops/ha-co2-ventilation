@@ -178,3 +178,23 @@ async def test_fan_speed_sensor_tracks_the_blower(hass: HomeAssistant) -> None:
     _fan(hass, True, 100)
     await hass.async_block_till_done()
     assert speed() == "medium_high"
+
+
+async def test_co2_trigger_is_the_room_that_started_the_run(hass: HomeAssistant) -> None:
+    """The room that crossed the on setpoint stays the trigger for the whole run."""
+    await _setup(hass)
+    co2 = {"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"}
+    # front_room is the configured sensor; it starts the run.
+    hass.states.async_set("sensor.front_room", "950", co2)
+    await hass.async_block_till_done()
+    assert _act(hass)[1]["co2_trigger"] == "sensor.front_room"
+    # Still above off: same trigger while the run lasts.
+    hass.states.async_set("sensor.front_room", "800", co2)
+    await hass.async_block_till_done()
+    assert _act(hass)[1]["co2_trigger"] == "sensor.front_room"
+
+
+async def test_co2_trigger_none_without_co2_run(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await _set(hass, g=True)
+    assert _act(hass)[1]["co2_trigger"] is None
