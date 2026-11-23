@@ -4,6 +4,11 @@ All notable changes to CO2 Ventilation. Newest first.
 
 After updating in HACS, restart Home Assistant and refresh your dashboard (close and reopen the app on a phone or tablet) so the new card loads.
 
+## 0.17.2
+
+- Fix: during ventilation the G input read on even when nothing was calling the fan, because the ECM leaks voltage back onto the medium tap that G is wired to. That made ventilation look like "Called by Nest and CO₂" and recorded every run as Medium. Now G only counts as a real call while the vent fan is on if G came on first (or the Nest reports its fan timer on). This fixes the Fan speed sensor, the HVAC activity sensor, the CO2 card's status row, and the thermostat card's chips and chart. The chart re-reads past days with the same rule. Fan speed history recorded before this update keeps its Medium readings.
+- Limit: if a real G call starts before a ventilation run and ends during it, G keeps reading on (from leakage) until the vent fan stops.
+
 ## 0.17.1
 
 - CO2 card: when CO2 is running the fan, the status row names the room that started the run and its reading now, for example "Called by CO₂ in Bedroom · 1012 ppm", or "Called by Nest and CO₂ in Bedroom · Medium wins" when the thermostat is calling too. It uses the sensor's Home Assistant area, or its name if it has no area. The room stays the same for the whole run even if another room climbs higher.

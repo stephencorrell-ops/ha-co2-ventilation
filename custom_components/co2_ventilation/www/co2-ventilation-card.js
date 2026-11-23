@@ -1,7 +1,7 @@
 /* CO2 Ventilation card \u2014 ships with the co2_ventilation integration. */
 (() => {
 
-const CARD_VERSION = "0.17.1";
+const CARD_VERSION = "0.17.2";
 const PLATFORM = "co2_ventilation";
 const COLORS = ["#3987e5", "#1baf7a", "#eda100", "#eb6834", "#9085e9", "#e87ba4", "#008300", "#e66767"];
 const STATUS_TEXT = {
@@ -1056,10 +1056,29 @@ class Co2ThermostatCard extends HTMLElement {
       const s = this._at(pts, t)?.s;
       return s === "unknown" || s === "unavailable" ? null : s;
     };
+    // When the current "on" run of an entity started (null if it's off at t).
+    const runStart = (id, t) => {
+      const pts = (id && h.data[id]) || [];
+      let start = null;
+      for (const p of pts) {
+        if (p.t > t) break;
+        if (p.s === "on") start ??= p.t;
+        else start = null;
+      }
+      return start;
+    };
+    // G leaks on from the motor taps during ventilation; it only counts as a
+    // real call if it came on before the vent fan (same rule as the integration).
+    const gCall = (t) => {
+      const g = runStart(e.g, t);
+      if (g == null) return false;
+      const v = runStart(e.vent, t);
+      return v == null || g < v;
+    };
     for (let i = 0; i < ts.length - 1; i++) {
       const a = ts[i], b = ts[i + 1], mid = a + 1;
       const vent = isOn(e.vent, mid) && ventKind(stateAt(e.caller, mid), stateAt(e.status, mid));
-      const modes = modesFrom(isOn(e.g, mid), isOn(e.y, mid), isOn(e.o, mid), isOn(e.w2, mid), vent);
+      const modes = modesFrom(gCall(mid), isOn(e.y, mid), isOn(e.o, mid), isOn(e.w2, mid), vent);
       for (const m of modes) {
         const last = segs.findLast?.((s) => s.m === m) ?? [...segs].reverse().find((s) => s.m === m);
         if (last && last.b === a) last.b = b;
@@ -1287,6 +1306,13 @@ class Co2ThermostatCard extends HTMLElement {
     return modes + speeds;
   }
 
+  // Is G really calling? The integration filters out leakage from the motor
+  // taps during ventilation (calls.g); older versions fall back to the input.
+  _gNow() {
+    const calls = this._hass.states[this._e.activity]?.attributes?.calls;
+    return calls && typeof calls.g === "boolean" ? calls.g : this._on(this._e.g);
+  }
+
   // Lane key for the ventilation fan right now, or false if it's off.
   _ventNow() {
     const e = this._e;
@@ -1301,7 +1327,7 @@ class Co2ThermostatCard extends HTMLElement {
 
     const ventKey = this._ventNow();
     const vent = !!ventKey;
-    const modes = modesFrom(this._on(e.g), this._on(e.y), this._on(e.o), this._on(e.w2), ventKey);
+    const modes = modesFrom(this._gNow(), this._on(e.y), this._on(e.o), this._on(e.w2), ventKey);
     const main = modes.filter((m) => m !== ventKey);
     const pill = $("pill");
     const defrost = this._on(e.y) && this._on(e.o) && this._on(e.w2);
@@ -1316,10 +1342,10 @@ class Co2ThermostatCard extends HTMLElement {
     const speed = hass.states[e.speed]?.state;
     // The blower runs for any thermostat call or the ventilation fan. Heat and
     // cooling run it at full speed; ventilation alone at the chosen speed.
-    const blower = this._on(e.g) || this._on(e.y) || this._on(e.w2) || vent;
+    const blower = this._gNow() || this._on(e.y) || this._on(e.w2) || vent;
     const fullSpeed = this._on(e.y) || this._on(e.w2);
     const actual = hass.states[e.activity]?.attributes?.fan_speed;
-    setSpin($("fanicon"), blower, actual ? SPIN_SECONDS[actual] || 0.9 : fullSpeed ? 0.6 : vent && !this._on(e.g) ? SPIN_SECONDS[speed] || 1.1 : 0.9);
+    setSpin($("fanicon"), blower, actual ? SPIN_SECONDS[actual] || 0.9 : fullSpeed ? 0.6 : vent && !this._gNow() ? SPIN_SECONDS[speed] || 1.1 : 0.9);
     $("fanicon").setAttribute("aria-label", blower ? "Blower running" : "Blower off");
     $("fanicon").title = blower ? "Blower running" : "Blower off";
     const speedTxt = SPEED_LABELS[speed] || "";
@@ -1331,7 +1357,7 @@ class Co2ThermostatCard extends HTMLElement {
       [e.vent, "Vent", ventKey === "remote" ? "Remote" : ventKey === "hand" ? "By hand" : speedTxt || "CO₂ fan"],
     ]
       .filter(([id]) => id)
-      .map(([id, k, n]) => `<span class="chip ${this._on(id) ? "on" : ""}" title="${esc(id)}"><i></i><b>${k}</b> ${esc(n)}</span>`)
+      .map(([id, k, n]) => `<span class="chip ${(id === e.g ? this._gNow() : this._on(id)) ? "on" : ""}" title="${esc(id)}"><i></i><b>${k}</b> ${esc(n)}</span>`)
       .join("");
     if ($("calls").innerHTML !== chips) $("calls").innerHTML = chips;
     const legend = this._legend();

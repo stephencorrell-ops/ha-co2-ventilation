@@ -198,3 +198,30 @@ async def test_co2_trigger_none_without_co2_run(hass: HomeAssistant) -> None:
     await _setup(hass)
     await _set(hass, g=True)
     assert _act(hass)[1]["co2_trigger"] is None
+
+
+async def test_g_leakage_during_ventilation_is_ignored(hass: HomeAssistant) -> None:
+    """G reading on after the vent fan started is leakage from the motor taps."""
+    await _setup(hass)
+    hass.states.async_set("sensor.front_room", "950", {"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"})
+    await hass.async_block_till_done()
+    assert hass.states.get(FAN).state == "on"
+    await _set(hass, g=True)  # leaks onto G after the vent started
+    state, a = _act(hass)
+    assert state == "ventilating"
+    assert a["called_by"] == ["co2"]
+    assert a["fan_speed"] == "low"
+    assert a["calls"]["g"] is False
+    assert hass.states.get(FAN_SPEED).state == "low"
+
+
+async def test_g_before_ventilation_is_a_real_call(hass: HomeAssistant) -> None:
+    """G already on when the vent fan starts is a real call: medium wins."""
+    await _setup(hass)
+    await _set(hass, g=True)
+    hass.states.async_set("sensor.front_room", "950", {"device_class": "carbon_dioxide", "unit_of_measurement": "ppm"})
+    await hass.async_block_till_done()
+    state, a = _act(hass)
+    assert state == "fan_only"
+    assert a["called_by"] == ["thermostat", "co2"]
+    assert a["fan_speed"] == "medium"

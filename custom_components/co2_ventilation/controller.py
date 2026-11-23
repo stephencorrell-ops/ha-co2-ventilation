@@ -442,13 +442,35 @@ class Co2VentilationController:
         state = self.hass.states.get(entity_id)
         return state is not None and state.state == STATE_ON
 
+    def _g_call(self) -> bool:
+        """Is the thermostat (or humidifier) really calling the fan on G?
+
+        G is tied to the motor's medium tap, and the ECM leaks voltage back
+        onto it whenever the ventilation relays power another tap, so the G
+        input reads on during every ventilation run. Leakage can only start
+        after the vent fan does: while the vent fan is on, G counts only if it
+        came on first. (A Nest fan timer, if the thermostat reports one, also
+        counts.)
+        """
+        if not self._call_on(CONF_CALL_G):
+            return False
+        fan = self.hass.states.get(self.fan_entity) if self.fan_entity else None
+        if fan is None or fan.state != STATE_ON:
+            return True
+        g = self.hass.states.get(self.thermostat[CONF_CALL_G])
+        if g.last_changed < fan.last_changed:
+            return True
+        climate = self.thermostat.get(CONF_CLIMATE)
+        state = self.hass.states.get(climate) if climate else None
+        return state is not None and state.attributes.get("fan_mode") == "on"
+
     def hvac_activity(self) -> dict[str, Any]:
         """What the HVAC is doing, who asked for it, and the blower speed.
 
         Thermostat calls come from the 24 V inputs; the ventilation fan was
         turned on either by this integration (CO2) or by hand (manual).
         """
-        g, y = self._call_on(CONF_CALL_G), self._call_on(CONF_CALL_Y)
+        g, y = self._g_call(), self._call_on(CONF_CALL_Y)
         o, w2 = self._call_on(CONF_CALL_OB), self._call_on(CONF_CALL_W2)
         fan_on = self._fan_is_on()
         we_did = fan_on and self._we_turned_on
